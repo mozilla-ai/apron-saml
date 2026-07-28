@@ -1,0 +1,52 @@
+[project]
+name = "apron-saml"
+dynamic = ["version"]
+description = "Stateless SP-side SAML 2.0 protocol library — AuthnRequest building, metadata, response decoding, and assertion validation."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.11"
+dependencies = [
+    # The XML-security backend is added by the Epic 1 ADR (leaning pysaml2, which needs the
+    # system `xmlsec1` binary — see the bring-up runbook). Kept empty until then so the
+    # skeleton installs and imports cleanly without any system dependency.
+]
+
+[dependency-groups]
+dev = [
+    { include-group = "lint" },
+    { include-group = "tests" },
+]
+lint = [
+    "pre-commit>=4.5.1",
+    "ruff>=0.15.4",
+    "ty>=0.0.23",
+]
+tests = [
+    "pytest>=9.0.3",
+    "freezegun>=1.5.1",
+    "setuptools>=82.0",
+    "setuptools-scm[toml]>=9.2",
+]
+
+[tool.uv]
+exclude-newer = "7 days"
+
+[build-system]
+requires = ["setuptools>=48", "setuptools_scm[toml]>=6.3.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests", "tests.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that call a real IdP (require APRON_SAML_INTEGRATION_TESTS)",
+]
