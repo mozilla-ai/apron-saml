@@ -6,9 +6,10 @@ readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.11"
 dependencies = [
-    # The XML-security backend is added by the Epic 1 ADR (leaning pysaml2, which needs the
-    # system `xmlsec1` binary — see the bring-up runbook). Kept empty until then so the
-    # skeleton installs and imports cleanly without any system dependency.
+    # XML-security backend (ADR 0001: docs/adr/0001-xml-security-backend.md). Consumed internally
+    # behind the ServiceProvider facade; needs the `xmlsec1` CLI binary at runtime for
+    # signing/encryption/decryption. Its HTTP helpers are never called (no network I/O here).
+    "pysaml2>=7.5,<8",
 ]
 
 [dependency-groups]
