@@ -41,7 +41,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "ruff", specifier = ">=0.15.4" },
     { name = "setuptools", specifier = ">=82.0" },
-    { name = "setuptools-scm", extras = ["toml"], specifier = ">=9.2" },
+    { name = "setuptools-scm", extras = ["toml"], specifier = ">=10.2.1" },
     { name = "ty", specifier = ">=0.0.23" },
 ]
 lint = [
@@ -53,7 +53,7 @@ tests = [
     { name = "freezegun", specifier = ">=1.5.1" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "setuptools", specifier = ">=82.0" },
-    { name = "setuptools-scm", extras = ["toml"], specifier = ">=9.2" },
+    { name = "setuptools-scm", extras = ["toml"], specifier = ">=10.2.1" },
 ]
 
 [[package]]

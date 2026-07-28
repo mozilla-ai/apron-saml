@@ -25,14 +25,14 @@ tests = [
     "pytest>=9.0.3",
     "freezegun>=1.5.1",
     "setuptools>=82.0",
-    "setuptools-scm[toml]>=9.2",
+    "setuptools-scm[toml]>=10.2.1",
 ]
 
 [tool.uv]
 exclude-newer = "7 days"
 
 [build-system]
-requires = ["setuptools>=48", "setuptools_scm[toml]>=6.3.1"]
+requires = ["setuptools>=48", "setuptools_scm[toml]>=10.2.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
