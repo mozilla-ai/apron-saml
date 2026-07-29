@@ -76,6 +76,7 @@ class SamlIdentity:
     """
 
     name_id: str
+    issuer: str
     name_id_format: str | None = None
     email: str | None = None
     attributes: dict[str, list[str]] = field(default_factory=dict)
