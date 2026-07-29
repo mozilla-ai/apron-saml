@@ -31,7 +31,7 @@ Requires Python 3.11+ and the `xmlsec1` command-line binary at runtime — the X
 ([ADR 0001](docs/adr/0001-xml-security-backend.md)) uses it for signature verification and
 assertion decryption:
 
-- Debian/Ubuntu: `apt-get install xmlsec1`
+- Debian/Ubuntu: `sudo apt-get update && sudo apt-get install -y xmlsec1`
 - macOS: `brew install libxmlsec1` (provides the `xmlsec1` CLI)
 
 ## Usage (target API)

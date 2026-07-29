@@ -40,7 +40,7 @@ the "no network I/O in the library" stance.
 
 | Axis | pysaml2 | python3-saml |
 |---|---|---|
-| xmlsec dependency shape | Runtime `xmlsec1` **CLI binary**; installs as pure-Python wheels (no compiled extension) | Build-time compiled `python-xmlsec` + `lxml` (native C extensions) |
+| xmlsec dependency shape | Runtime `xmlsec1` **CLI binary**; no `python-xmlsec`/`lxml` bindings, installs from prebuilt wheels | Compiled `python-xmlsec` + `lxml` bindings; source build needs libxml2/libxmlsec1 headers |
 | Maintenance | Active — v7.5.4 (2025-10) under IdentityPython | Dormant — v1.16.0 (2023-10); OneLogin abandoned it, community fork, single maintainer |
 | Encrypted assertions | Supported via the xmlsec1 binary | Supported via `python-xmlsec` |
 | XSW/CVE posture | Non-trivial CVE history, all patched; maintained ⇒ future fixes land | Non-trivial CVE history; dormant ⇒ future fixes uncertain |
@@ -48,9 +48,11 @@ the "no network I/O in the library" stance.
 
 ### xmlsec dependency shape
 
-The spike confirmed pysaml2 installs as 15 pure-Python wheels with **no** compiled `xmlsec`/`lxml`
-extension, and imports with no system xmlsec1 present; the binary is needed only at runtime for
-signing/encryption/decryption. In CI this is one `apt-get`/`brew` line and nothing to compile.
+The spike confirmed pysaml2's dependency tree pulls **no** `python-xmlsec`/`lxml` bindings and
+installs entirely from prebuilt wheels — the native ones (e.g. `cryptography`, `cffi`) ship compiled
+and need no local build toolchain — and it imports with no system xmlsec1 present; the binary is
+needed only at runtime for signing/encryption/decryption. In CI this is one `apt-get`/`brew` line and
+no XML-security build step.
 
 python3-saml pulls compiled `xmlsec` and `lxml`. Where a prebuilt wheel exists for the platform and
 Python version the install is smooth; where one does not, it falls back to a source build requiring
@@ -76,8 +78,9 @@ decrypt, so we cannot use it to avoid the `xmlsec1` binary. The binary stays a h
 Both libraries have a non-trivial CVE history (signature-wrapping, comment-injection, and
 canonicalization classes). Neither is "clean," and neither choice lets us outsource our security
 posture: XML-Signature-Wrapping hardening, ignoring in-message `KeyInfo` for key selection,
-verifying against the statically-configured IdP certificate, rejecting SHA-1, and decrypt-then-run-
-the-full-pipeline all remain apron-saml's responsibility as defense-in-depth on top of the backend.
+verifying against the statically-configured IdP certificate, rejecting SHA-1, and running the full
+validation pipeline on the decrypted plaintext all remain apron-saml's responsibility as
+defense-in-depth on top of the backend.
 Given that, the tie-breaker is again maintenance: the parser-differential and canonicalization attack
 classes keep evolving (e.g. the 2025 SAML-SSO-bypass disclosures against other toolkits), and only a
 maintained upstream reliably ships fixes for the next one.
@@ -117,8 +120,9 @@ Both spikes ran under the repo's `exclude-newer = "7 days"` policy (pinned to 20
 Python 3.13, macOS/arm64.
 
 **pysaml2**
-- Resolves to `pysaml2==7.5.4`; installs as 15 pure-Python wheels (`cryptography`, `defusedxml`,
-  `pyopenssl`, `xmlschema`, `python-dateutil`, `requests`, …). No `xmlsec` or `lxml` compiled package.
+- Resolves to `pysaml2==7.5.4`; installs 15 packages from prebuilt wheels (`cryptography`, `cffi`,
+  `defusedxml`, `pyopenssl`, `xmlschema`, `python-dateutil`, `requests`, …). No `python-xmlsec` or
+  `lxml` bindings, and no source build — the native wheels (`cryptography`, `cffi`) need no dev headers.
 - `import saml2` succeeds with no system xmlsec1 present; the default path locates the `xmlsec1` CLI
   binary at runtime (`saml2.sigver.get_xmlsec_binary`).
 - Exception hierarchy present: `saml2.SAMLError` → `SignatureError`, `StatusError`,
