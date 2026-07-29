@@ -124,9 +124,18 @@ The tenancy-hint decision is the substantive one. Unlike OAuth/OIDC — where pr
 well-known tenant claims (Google `hd`, Microsoft `tid`) — SAML defines **no** standard tenant claim.
 The honest, always-present tenant discriminator in a SAML assertion is the `<Issuer>` entityID: in
 enterprise SSO each customer configures its own IdP connection, so one issuer entityID maps to one
-tenant, and it is exactly the entityID whose statically-configured certificate validated the assertion
+tenant, and it is exactly the entityID whose statically configured certificate validated the assertion
 (ADR 0001, and the Epic 3 signature checks). We therefore surface `issuer` as a first-class field and
 stop there.
+
+Surfacing `issuer` as a *trustworthy* tenant hint carries one validation obligation. Signature
+verification against the configured certificate proves the assertion is authentic; it does not prove
+the `<Issuer>` string is honest, and a consumer that keys tenancy off `issuer` must not be handed a
+value that was never bound to the configured IdP. Response validation therefore MUST reject any
+assertion whose `<Issuer>` does not exactly match the configured IdP entityID (the `entity_id` parsed
+from `idp_metadata`) before a `SamlIdentity` is returned; `issuer` is exposed only once that binding
+holds. This is a validation-pipeline invariant (Epic 3), recorded here because the safety of `issuer`
+as a tenancy hint depends on it.
 
 We deliberately do **not** add a normalized `tenancy`/`hosted_domain` field or any provider-specific
 claim field. A normalized tenancy field would have to guess which custom attribute is "the tenant,"
@@ -161,6 +170,10 @@ skeleton and this ADR agree.
   (#14), and `feat(errors): SamlError hierarchy` (#15) build against this ratified surface; the assemble
   step (#26) populates `SamlIdentity`, including choosing the `email` source and the attribute-keying
   policy left open here.
+- **Validation obligation on `issuer`**: response validation (Epic 3) MUST reject an assertion whose
+  `<Issuer>` does not exactly match the configured IdP entityID before returning a `SamlIdentity`, so the
+  exposed `issuer` is always bound to the configured IdP. The runbook's Epic 3 DoD does not enumerate
+  this issuer-binding check explicitly, so the relevant validation issue must add it.
 - **Reversibility**: the result types sit behind the `ServiceProvider` facade as plain dataclasses.
   Appending optional fields later is backward-compatible; `name_id` and `issuer` are the required
   invariants a validated identity must carry.
