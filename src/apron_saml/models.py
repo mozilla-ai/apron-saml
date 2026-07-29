@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -12,6 +13,8 @@ class SamlConfig:
 
     Holds the SP's own identifiers plus the trust material for one identity provider (IdP).
     apron-saml performs no network I/O: the caller fetches ``idp_metadata`` and passes the XML in.
+    ``acs_url`` may use http for local development, but production deployments should use https,
+    since the assertion consumer endpoint receives bearer assertions.
     """
 
     entity_id: str
@@ -23,13 +26,31 @@ class SamlConfig:
     decrypt_key: str | None = None
 
     def __post_init__(self) -> None:
-        """Reject configuration missing an identifier the protocol cannot proceed without."""
-        if not self.entity_id:
+        """Validate the configuration at construction, rejecting values the protocol cannot use.
+
+        Full validation of ``decrypt_key`` as a usable key is deferred to the decryption path;
+        here it is only required to be non-blank when supplied.
+
+        Raises:
+            ValueError: If ``entity_id``, ``acs_url``, or ``idp_metadata`` is blank; if ``acs_url``
+                is not an absolute http or https URL; if ``idp_metadata`` is not XML; if
+                ``clock_skew`` is negative; or if ``decrypt_key`` is blank when supplied.
+        """
+        if not self.entity_id.strip():
             raise ValueError("entity_id must not be empty")
-        if not self.acs_url:
+        if not self.acs_url.strip():
             raise ValueError("acs_url must not be empty")
-        if not self.idp_metadata:
+        parsed = urlparse(self.acs_url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError("acs_url must be an absolute http or https URL")
+        if not self.idp_metadata.strip():
             raise ValueError("idp_metadata must not be empty")
+        if "<" not in self.idp_metadata:
+            raise ValueError("idp_metadata must contain SAML metadata XML, not a URL or file path")
+        if self.clock_skew < timedelta(0):
+            raise ValueError("clock_skew must not be negative")
+        if self.decrypt_key is not None and not self.decrypt_key.strip():
+            raise ValueError("decrypt_key must not be blank when provided")
 
 
 @dataclass(frozen=True)
