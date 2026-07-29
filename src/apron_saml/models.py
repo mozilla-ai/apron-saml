@@ -41,10 +41,12 @@ class SamlConfig:
         if not self.acs_url.strip():
             raise ValueError("acs_url must not be empty")
         parsed = urlparse(self.acs_url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
             raise ValueError("acs_url must be an absolute http or https URL")
         if not self.idp_metadata.strip():
             raise ValueError("idp_metadata must not be empty")
+        # Cheap fail-fast for the common misuse (a URL or file path in place of XML); authoritative
+        # well-formedness and parsing are the metadata layer's job via the vetted backend, not here.
         if "<" not in self.idp_metadata:
             raise ValueError("idp_metadata must contain SAML metadata XML, not a URL or file path")
         if self.clock_skew < timedelta(0):

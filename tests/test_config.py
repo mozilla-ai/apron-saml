@@ -66,7 +66,14 @@ def test_rejects_blank_acs_url(blank: str) -> None:
 
 @pytest.mark.parametrize(
     "bad_url",
-    ["sp.example.com/acs", "/saml/acs", "ftp://sp.example.com/acs", "https://"],
+    [
+        "sp.example.com/acs",
+        "/saml/acs",
+        "ftp://sp.example.com/acs",
+        "https://",
+        "https://user@/acs",
+        "https://:443/acs",
+    ],
 )
 def test_rejects_non_absolute_http_acs_url(bad_url: str) -> None:
     with pytest.raises(ValueError, match="acs_url"):
