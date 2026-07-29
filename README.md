@@ -27,8 +27,12 @@ All XML-security is delegated to a vetted library, never hand-rolled.
 pip install apron-saml
 ```
 
-Requires Python 3.11+. Once the XML-security backend lands (tracked in the backlog), a system
-`xmlsec`/`libxmlsec1` dependency will be required — installation notes will follow here.
+Requires Python 3.11+ and the `xmlsec1` command-line binary at runtime — the XML-security backend
+([ADR 0001](docs/adr/0001-xml-security-backend.md)) uses it for signature verification and
+assertion decryption:
+
+- Debian/Ubuntu: `sudo apt-get update && sudo apt-get install -y xmlsec1`
+- macOS: `brew install libxmlsec1` (provides the `xmlsec1` CLI)
 
 ## Usage (target API)
 

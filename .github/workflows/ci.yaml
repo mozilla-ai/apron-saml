@@ -25,12 +25,13 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The XML-security backend (Epic 1 ADR) needs a system xmlsec dependency.
-      # Uncomment when the backend lands — leaning pysaml2 (runtime `xmlsec1` binary):
-      #   - if: runner.os == 'Linux'
-      #     run: sudo apt-get update && sudo apt-get install -y xmlsec1
-      #   - if: runner.os == 'macOS'
-      #     run: brew install libxmlsec1
+      # XML-security backend is pysaml2 (ADR 0001), which shells out to the `xmlsec1` CLI at runtime.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xmlsec1
+      - if: runner.os == 'macOS'
+        run: brew install libxmlsec1
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: ${{ matrix.python-version }}
