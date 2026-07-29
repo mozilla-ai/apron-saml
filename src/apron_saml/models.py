@@ -23,7 +23,11 @@ class SamlConfig:
     decrypt_key: str | None = None
 
     def __post_init__(self) -> None:
-        """Reject configuration missing an identifier the protocol cannot proceed without."""
+        """Reject configuration missing an identifier the protocol cannot proceed without.
+
+        Raises:
+            ValueError: If ``entity_id``, ``acs_url``, or ``idp_metadata`` is empty.
+        """
         if not self.entity_id:
             raise ValueError("entity_id must not be empty")
         if not self.acs_url:
