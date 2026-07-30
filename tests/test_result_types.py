@@ -46,8 +46,7 @@ def test_saml_identity_requires_issuer() -> None:
 def test_saml_identity_attributes_are_per_instance() -> None:
     first = SamlIdentity(name_id="a", issuer=_ISSUER)
     second = SamlIdentity(name_id="b", issuer=_ISSUER)
-    first.attributes["role"] = ["admin"]
-    assert second.attributes == {}
+    assert first.attributes is not second.attributes
 
 
 def test_saml_identity_is_frozen() -> None:
