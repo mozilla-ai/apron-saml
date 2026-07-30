@@ -33,18 +33,21 @@ class SamlConfig:
 
         Raises:
             ValueError: If ``entity_id``, ``acs_url``, or ``idp_metadata`` is blank; if ``acs_url``
-                is not an absolute http or https URL; if ``idp_metadata`` is not XML; if
-                ``clock_skew`` is negative; or if ``decrypt_key`` is blank when supplied.
+                is not an absolute http or https URL or carries userinfo; if ``idp_metadata`` does
+                not appear to contain XML; if ``clock_skew`` is negative; or if ``decrypt_key`` is
+                blank when supplied.
         """
         if not self.entity_id.strip():
-            raise ValueError("entity_id must not be empty")
+            raise ValueError("entity_id must not be blank")
         if not self.acs_url.strip():
-            raise ValueError("acs_url must not be empty")
+            raise ValueError("acs_url must not be blank")
         parsed = urlparse(self.acs_url)
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             raise ValueError("acs_url must be an absolute http or https URL")
+        if "@" in parsed.netloc:
+            raise ValueError("acs_url must not contain userinfo (credentials)")
         if not self.idp_metadata.strip():
-            raise ValueError("idp_metadata must not be empty")
+            raise ValueError("idp_metadata must not be blank")
         # Cheap fail-fast for the common misuse (a URL or file path in place of XML); authoritative
         # well-formedness and parsing are the metadata layer's job via the vetted backend, not here.
         if "<" not in self.idp_metadata:

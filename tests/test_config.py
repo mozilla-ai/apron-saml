@@ -80,6 +80,15 @@ def test_rejects_non_absolute_http_acs_url(bad_url: str) -> None:
         _config(acs_url=bad_url)
 
 
+@pytest.mark.parametrize(
+    "url_with_userinfo",
+    ["https://user@sp.example.com/acs", "https://admin@sp.example.com:8443/acs"],
+)
+def test_rejects_acs_url_with_userinfo(url_with_userinfo: str) -> None:
+    with pytest.raises(ValueError, match="userinfo"):
+        _config(acs_url=url_with_userinfo)
+
+
 @pytest.mark.parametrize("blank", ["", "   "])
 def test_rejects_blank_idp_metadata(blank: str) -> None:
     with pytest.raises(ValueError, match="idp_metadata"):
