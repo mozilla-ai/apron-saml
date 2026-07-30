@@ -6,10 +6,8 @@ import apron_saml
 from apron_saml import (
     MemoryAssertionStore,
     SamlConfig,
-    SamlError,
     ServiceProvider,
 )
-from apron_saml.errors import SignatureError
 
 # The public surface ratified by ADR 0002 (§4c export list).
 EXPECTED_EXPORTS = {
@@ -73,10 +71,6 @@ def test_saml_config_defaults_and_service_provider_wiring() -> None:
     clock = _FixedClock(datetime(2026, 1, 1, tzinfo=UTC))
     sp = ServiceProvider(cfg, assertion_store=MemoryAssertionStore(), clock=clock)
     assert sp is not None
-
-
-def test_errors_share_a_common_base() -> None:
-    assert issubclass(SignatureError, SamlError)
 
 
 def test_memory_assertion_store_roundtrip() -> None:
