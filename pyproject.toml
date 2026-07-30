@@ -10,6 +10,15 @@ dependencies = [
     # behind the ServiceProvider facade; needs the `xmlsec1` CLI binary at runtime for
     # signing/encryption/decryption. Its HTTP helpers are never called (no network I/O here).
     "pysaml2>=7.5,<8",
+    # Security floors on pysaml2's transitive deps (see #38, #35). A single-package Dependabot
+    # bump keeps silently re-resolving uv.lock and rolling a sibling back below its patched
+    # version, so the floors are pinned here where a lockfile diff cannot hide them.
+    # cryptography: GHSA-537c-gmf6-5ccf (HIGH) — vulnerable OpenSSL bundled in wheels < 48.0.1.
+    "cryptography>=48.0.1",
+    # pyopenssl: GHSA-5pwr-322w-8jr4 (HIGH) + GHSA-vp96-hxj8-p424, both first patched in 26.0.0.
+    # This floor also holds pysaml2 at 7.5.0: 7.5.1+ cap pyopenssl<24.3.0, which would drag
+    # cryptography back below 44 and reopen both advisories above.
+    "pyopenssl>=26.0.0",
 ]
 
 [dependency-groups]
