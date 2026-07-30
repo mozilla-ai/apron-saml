@@ -97,8 +97,9 @@ class AuthnRequest:
 class SamlIdentity:
     """The validated identity extracted from a SAML assertion.
 
-    A service-provider-shaped result; the consuming application maps it onto its own canonical
-    user model.
+    A service-provider-shaped result the consuming application maps onto its own user model.
+    ``name_id`` (the subject) and ``issuer`` (the asserting IdP's ``<Issuer>`` entityID, usable as a
+    tenant discriminator) are always present; the remaining fields are best-effort enrichments.
     """
 
     name_id: str
