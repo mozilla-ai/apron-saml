@@ -96,3 +96,26 @@ def test_post_form_escapes_relay_state_to_prevent_injection() -> None:
 def test_post_form_escapes_the_destination() -> None:
     form = _authn(destination='https://idp.example.com/sso"><script>alert(1)</script>').post_form()
     assert "<script>alert(1)</script>" not in form
+
+
+def test_post_form_has_an_always_visible_submit_fallback() -> None:
+    form = _authn().post_form()
+    assert "<noscript>" not in form
+    root = ET.fromstring(f"<root>{form}</root>")
+    submits = [inp for inp in root.iter("input") if inp.get("type") == "submit"]
+    assert len(submits) == 1
+
+
+def test_redirect_url_avoids_a_double_question_mark_on_a_bare_query() -> None:
+    url = _authn(destination=f"{_SSO_URL}?").redirect_url()
+    assert "??" not in url
+    assert "SAMLRequest" in parse_qs(urlsplit(url).query)
+    assert _decode_redirect(url) == _XML
+
+
+def test_redirect_url_places_params_before_a_fragment() -> None:
+    url = _authn(destination=f"{_SSO_URL}#frag").redirect_url()
+    split = urlsplit(url)
+    assert split.fragment == "frag"
+    assert "SAMLRequest" in parse_qs(split.query)
+    assert _decode_redirect(url) == _XML

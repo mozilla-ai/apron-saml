@@ -7,7 +7,7 @@ import html
 import zlib
 from dataclasses import dataclass, field
 from datetime import timedelta
-from urllib.parse import urlencode, urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 
 @dataclass(frozen=True)
@@ -98,8 +98,9 @@ class AuthnRequest:
         params = {"SAMLRequest": base64.b64encode(deflated).decode("ascii")}
         if self.relay_state is not None:
             params["RelayState"] = self.relay_state
-        separator = "&" if urlparse(self.destination).query else "?"
-        return f"{self.destination}{separator}{urlencode(params)}"
+        parts = urlsplit(self.destination)
+        query = urlencode([*parse_qsl(parts.query), *params.items()])
+        return urlunsplit(parts._replace(query=query))
 
     def post_form(self) -> str:
         """Return a self-submitting HTML form encoding the request for the HTTP-POST binding.
@@ -107,7 +108,8 @@ class AuthnRequest:
         The request XML is base64-encoded into a ``SAMLRequest`` hidden field, with ``relay_state``
         as a ``RelayState`` field when present, in a form that posts to the destination on load.
         Interpolated values are HTML-escaped, so a hostile destination or relay state cannot break
-        out of the markup.
+        out of the markup. A visible submit button lets the user continue if the auto-submit script
+        does not run (for example under a Content-Security-Policy that blocks inline scripts).
         """
         payload = base64.b64encode(self.xml.encode("utf-8")).decode("ascii")
         fields = [f'<input type="hidden" name="SAMLRequest" value="{html.escape(payload)}"/>']
@@ -117,7 +119,7 @@ class AuthnRequest:
         return (
             f'<form id="saml-post-form" method="post" action="{action}">'
             f"{''.join(fields)}"
-            '<noscript><input type="submit" value="Continue"/></noscript>'
+            '<input type="submit" value="Continue"/>'
             "</form>"
             "<script>document.getElementById('saml-post-form').submit();</script>"
         )
