@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import base64
+import html
+import zlib
 from dataclasses import dataclass, field
 from datetime import timedelta
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 
 @dataclass(frozen=True)
@@ -85,12 +88,41 @@ class AuthnRequest:
     relay_state: str | None = None
 
     def redirect_url(self) -> str:
-        """Return the destination URL with the request encoded for the HTTP-Redirect binding."""
-        raise NotImplementedError
+        """Return the destination URL with the request encoded for the HTTP-Redirect binding.
+
+        The request XML is DEFLATE-compressed, base64-encoded, and carried in the ``SAMLRequest``
+        query parameter, with ``relay_state`` alongside it as ``RelayState`` when present.
+        """
+        compressor = zlib.compressobj(9, zlib.DEFLATED, -zlib.MAX_WBITS)
+        deflated = compressor.compress(self.xml.encode("utf-8")) + compressor.flush()
+        params = {"SAMLRequest": base64.b64encode(deflated).decode("ascii")}
+        if self.relay_state is not None:
+            params["RelayState"] = self.relay_state
+        parts = urlsplit(self.destination)
+        query = urlencode([*parse_qsl(parts.query), *params.items()])
+        return urlunsplit(parts._replace(query=query))
 
     def post_form(self) -> str:
-        """Return a self-submitting HTML form encoding the request for the HTTP-POST binding."""
-        raise NotImplementedError
+        """Return a self-submitting HTML form encoding the request for the HTTP-POST binding.
+
+        The request XML is base64-encoded into a ``SAMLRequest`` hidden field, with ``relay_state``
+        as a ``RelayState`` field when present, in a form that posts to the destination on load.
+        Interpolated values are HTML-escaped, so a hostile destination or relay state cannot break
+        out of the markup. A visible submit button lets the user continue if the auto-submit script
+        does not run (for example under a Content-Security-Policy that blocks inline scripts).
+        """
+        payload = base64.b64encode(self.xml.encode("utf-8")).decode("ascii")
+        fields = [f'<input type="hidden" name="SAMLRequest" value="{html.escape(payload)}"/>']
+        if self.relay_state is not None:
+            fields.append(f'<input type="hidden" name="RelayState" value="{html.escape(self.relay_state)}"/>')
+        action = html.escape(self.destination)
+        return (
+            f'<form id="saml-post-form" method="post" action="{action}">'
+            f"{''.join(fields)}"
+            '<input type="submit" value="Continue"/>'
+            "</form>"
+            "<script>document.getElementById('saml-post-form').submit();</script>"
+        )
 
 
 @dataclass(frozen=True)
