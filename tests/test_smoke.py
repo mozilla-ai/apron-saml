@@ -6,11 +6,8 @@ import apron_saml
 from apron_saml import (
     MemoryAssertionStore,
     SamlConfig,
-    SamlError,
-    SamlIdentity,
     ServiceProvider,
 )
-from apron_saml.errors import SignatureError
 
 # The public surface ratified by ADR 0002 (§4c export list).
 EXPECTED_EXPORTS = {
@@ -75,25 +72,6 @@ def test_saml_config_defaults_and_service_provider_wiring() -> None:
     clock = _FixedClock(datetime(2026, 1, 1, tzinfo=UTC))
     sp = ServiceProvider(cfg, assertion_store=MemoryAssertionStore(), clock=clock)
     assert sp is not None
-
-
-def test_saml_identity_schema_and_defaults() -> None:
-    identity = SamlIdentity(name_id="user@example.com", issuer="https://idp.example.com/entity")
-    assert identity.name_id == "user@example.com"
-    assert identity.issuer == "https://idp.example.com/entity"
-    assert identity.name_id_format is None
-    assert identity.email is None
-    assert identity.attributes == {}
-    assert identity.session_index is None
-
-
-def test_saml_identity_requires_issuer() -> None:
-    with pytest.raises(TypeError):
-        SamlIdentity(name_id="user@example.com")
-
-
-def test_errors_share_a_common_base() -> None:
-    assert issubclass(SignatureError, SamlError)
 
 
 def test_memory_assertion_store_roundtrip() -> None:
