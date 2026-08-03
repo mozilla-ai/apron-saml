@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from urllib.parse import urlparse
-from xml.etree.ElementTree import ParseError
+from xml.etree.ElementTree import Element, ParseError
 
+from defusedxml.ElementTree import fromstring as parse_safe_xml
 from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT
 from saml2.md import IDPSSODescriptor, entity_descriptor_from_string
 
@@ -20,6 +21,10 @@ _SSO_BINDING_PREFERENCE = (BINDING_HTTP_REDIRECT, BINDING_HTTP_POST)
 # KeyDescriptor ``use`` values whose key may verify an assertion signature: "signing", or unset
 # (a dual-use key). Any other value — "encryption", or an unrecognized use — is excluded.
 _SIGNING_USES = frozenset({None, "", "signing"})
+
+# SAML 2.0 metadata and XML-DSIG namespaces, for navigating certificate elements in the XML directly.
+_MD_NS = "urn:oasis:names:tc:SAML:2.0:metadata"
+_DS_NS = "http://www.w3.org/2000/09/xmldsig#"
 
 
 def parse_idp_metadata(xml: str) -> IdPDescriptor:
@@ -62,10 +67,15 @@ def parse_idp_metadata(xml: str) -> IdPDescriptor:
     if not idp_roles:
         raise MetadataError("IdP metadata describes no identity provider")
 
+    sso_url = _select_sso_url(idp_roles)
+    # Re-read the now-validated metadata to collect certificates directly: a single <X509Data> may
+    # carry a chain of several <X509Certificate> elements, which the object model above keeps only the
+    # last of. The document has already passed the well-formedness and DTD/entity checks above.
+    signing_certificates = _collect_signing_certificates(parse_safe_xml(xml))
     return IdPDescriptor(
         entity_id=entity_id,
-        sso_url=_select_sso_url(idp_roles),
-        signing_certificates=_collect_signing_certificates(idp_roles),
+        sso_url=sso_url,
+        signing_certificates=signing_certificates,
     )
 
 
@@ -100,27 +110,29 @@ def _is_http_url(value: str) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.hostname)
 
 
-def _collect_signing_certificates(idp_roles: Iterable[IDPSSODescriptor]) -> tuple[str, ...]:
-    """Return the distinct signing certificates across the IdP roles, in document order.
+def _collect_signing_certificates(metadata_root: Element) -> tuple[str, ...]:
+    """Return the distinct signing certificates from the metadata's IdP roles, in document order.
 
-    Includes only keys usable for signing — those with ``use="signing"`` or no ``use`` — and
-    excludes all others, including encryption-only keys and any unrecognized ``use``. Certificate
-    text is normalized to whitespace-free base64.
+    Collects every ``<X509Certificate>`` beneath a signing-capable ``<KeyDescriptor>`` — one with
+    ``use="signing"`` or no ``use`` — of an ``<IDPSSODescriptor>``; encryption-only and unrecognized
+    ``use`` keys contribute nothing. A single ``<X509Data>`` may carry a chain of several
+    certificates, so all are read, not just the first. Certificate text is normalized to
+    whitespace-free base64.
     """
+    key_descriptor_path = f".//{{{_MD_NS}}}IDPSSODescriptor/{{{_MD_NS}}}KeyDescriptor"
+    certificate_path = f".//{{{_DS_NS}}}X509Certificate"
     certificates: list[str] = []
     seen: set[str] = set()
-    for role in idp_roles:
-        for key_descriptor in role.key_descriptor:
-            if key_descriptor.use not in _SIGNING_USES or key_descriptor.key_info is None:
+    for key_descriptor in metadata_root.iterfind(key_descriptor_path):
+        if key_descriptor.get("use") not in _SIGNING_USES:
+            continue
+        for certificate in key_descriptor.iterfind(certificate_path):
+            if not certificate.text:
                 continue
-            for x509_data in key_descriptor.key_info.x509_data:
-                certificate = x509_data.x509_certificate
-                if certificate is None or not certificate.text:
-                    continue
-                normalized = "".join(certificate.text.split())
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    certificates.append(normalized)
+            normalized = "".join(certificate.text.split())
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                certificates.append(normalized)
     return tuple(certificates)
 
 

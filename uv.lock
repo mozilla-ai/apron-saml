@@ -11,6 +11,7 @@ name = "apron-saml"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
+    { name = "defusedxml" },
     { name = "pyopenssl" },
     { name = "pysaml2" },
 ]
@@ -40,6 +41,7 @@ tests = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=48.0.1" },
+    { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pysaml2", specifier = ">=7.5,<8" },
 ]

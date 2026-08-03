@@ -27,15 +27,10 @@ def _sso(binding: str, location: str) -> str:
     return f'<SingleSignOnService Binding="{binding}" Location="{location}"/>'
 
 
-def _key_descriptor(cert: str, *, use: str | None = "signing") -> str:
+def _key_descriptor(*certs: str, use: str | None = "signing") -> str:
     use_attr = f' use="{use}"' if use is not None else ""
-    return (
-        f"<KeyDescriptor{use_attr}>"
-        f"<ds:KeyInfo><ds:X509Data>"
-        f"<ds:X509Certificate>{cert}</ds:X509Certificate>"
-        f"</ds:X509Data></ds:KeyInfo>"
-        f"</KeyDescriptor>"
-    )
+    x509 = "".join(f"<ds:X509Certificate>{cert}</ds:X509Certificate>" for cert in certs)
+    return f"<KeyDescriptor{use_attr}><ds:KeyInfo><ds:X509Data>{x509}</ds:X509Data></ds:KeyInfo></KeyDescriptor>"
 
 
 def _idp_metadata(
@@ -120,6 +115,17 @@ def test_keeps_only_signing_key_when_both_present() -> None:
         )
     )
     assert parse_idp_metadata(xml).signing_certificates == (_SIGNING_CERT,)
+
+
+def test_collects_all_certificates_within_one_x509data() -> None:
+    # A single X509Data may carry a certificate chain; every X509Certificate is captured, in order.
+    xml = _idp_metadata(key_descriptors=(_key_descriptor(_SIGNING_CERT, _SIGNING_CERT_2),))
+    assert parse_idp_metadata(xml).signing_certificates == (_SIGNING_CERT, _SIGNING_CERT_2)
+
+
+def test_excludes_all_certificates_of_encryption_key_descriptor() -> None:
+    xml = _idp_metadata(key_descriptors=(_key_descriptor(_ENCRYPTION_CERT, _SIGNING_CERT_2, use="encryption"),))
+    assert parse_idp_metadata(xml).signing_certificates == ()
 
 
 def test_collects_multiple_signing_certificates_in_order() -> None:
