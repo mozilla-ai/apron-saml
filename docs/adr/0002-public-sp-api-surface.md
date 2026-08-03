@@ -180,6 +180,26 @@ skeleton and this ADR agree.
 - **Encapsulation**: consistent with ADR 0001, the backend is never re-exported and runtime-visible
   strings describe conditions in domain terms, never naming the backend library.
 
+## Amendments
+
+### 2026-07-31 — `MetadataError` added to the `SamlError` hierarchy and export list
+
+The ratified export list (above) enumerated the `SamlError` hierarchy without a metadata-parsing
+failure type, because the failure surface of `parse_idp_metadata` was left to the feature that
+implements it. Implementing that function (#17) settled it: `parse_idp_metadata` is a public,
+re-exported entry point that rejects input which is not well-formed XML, is not rooted at an
+`EntityDescriptor`, names no entityID, describes no identity provider, or advertises no usable single
+sign-on endpoint. Per the `SamlError` base contract — every rejection path in the library raises a
+subclass of `SamlError` so callers can catch failures uniformly — this rejection is modeled as
+`MetadataError(SamlError)` rather than a bare `ValueError`, and is re-exported alongside the rest of
+the hierarchy so a caller can catch it specifically or as `SamlError`.
+
+This amends the **Public export list** decision (adding one name, `MetadataError`) and the
+**Consequences** note that `__init__.py` is unchanged. The change is additive and backward-compatible:
+no existing export is altered or removed. The boundary check in `SamlConfig.__post_init__` continues to
+raise `ValueError` for cheap fail-fast on obviously non-XML input; authoritative metadata parsing and
+its `MetadataError` rejection live in the metadata layer.
+
 ## References
 
 - Bring-up runbook §4 (proposed public API surface: §4a stance, §4b surface, §4c exports) and §6

@@ -11,6 +11,10 @@ class SamlError(Exception):
     """
 
 
+class MetadataError(SamlError):
+    """The IdP metadata could not be parsed into the entity ID, SSO endpoint, and keys an SP needs."""
+
+
 class MalformedResponseError(SamlError):
     """The SAML Response could not be decoded or parsed into the expected structure."""
 

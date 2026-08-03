@@ -9,7 +9,8 @@ from apron_saml import (
     ServiceProvider,
 )
 
-# The public surface ratified by ADR 0002 (§4c export list).
+# The public surface ratified by ADR 0002 (§4c export list), plus MetadataError added by the
+# 2026-07-31 amendment (parse_idp_metadata's rejection type).
 EXPECTED_EXPORTS = {
     "AssertionExpiredError",
     "AssertionStore",
@@ -20,6 +21,7 @@ EXPECTED_EXPORTS = {
     "InResponseToError",
     "MalformedResponseError",
     "MemoryAssertionStore",
+    "MetadataError",
     "RecipientMismatchError",
     "ReplayError",
     "SamlConfig",

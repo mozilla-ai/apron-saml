@@ -5,6 +5,7 @@ from apron_saml import (
     AudienceMismatchError,
     InResponseToError,
     MalformedResponseError,
+    MetadataError,
     RecipientMismatchError,
     ReplayError,
     SamlError,
@@ -15,6 +16,7 @@ from apron_saml import (
 # The concrete rejection types the library raises; callers catch them individually or, uniformly,
 # as SamlError.
 _CONCRETE_ERRORS = (
+    MetadataError,
     MalformedResponseError,
     StatusError,
     SignatureError,
