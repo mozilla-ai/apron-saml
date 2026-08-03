@@ -128,6 +128,25 @@ def test_excludes_all_certificates_of_encryption_key_descriptor() -> None:
     assert parse_idp_metadata(xml).signing_certificates == ()
 
 
+def test_ignores_key_descriptors_of_nested_idpsso_descriptor() -> None:
+    # Only the entity's direct IDPSSODescriptor role contributes certs; a nested IDPSSODescriptor
+    # (e.g. embedded in Extensions) must not smuggle in trust material.
+    xml = (
+        f'<EntityDescriptor xmlns="{_MD}" xmlns:ds="{_DS}" xmlns:x="urn:example:ext" '
+        f'entityID="{_ENTITY_ID}">'
+        f'<IDPSSODescriptor protocolSupportEnumeration="{_PROTOCOL}">'
+        f"{_key_descriptor(_SIGNING_CERT)}{_sso(_REDIRECT, _REDIRECT_URL)}"
+        f"</IDPSSODescriptor>"
+        f"<Extensions><x:wrapper>"
+        f'<IDPSSODescriptor protocolSupportEnumeration="{_PROTOCOL}">'
+        f"{_key_descriptor(_SIGNING_CERT_2)}"
+        f"</IDPSSODescriptor>"
+        f"</x:wrapper></Extensions>"
+        f"</EntityDescriptor>"
+    )
+    assert parse_idp_metadata(xml).signing_certificates == (_SIGNING_CERT,)
+
+
 def test_collects_multiple_signing_certificates_in_order() -> None:
     xml = _idp_metadata(key_descriptors=(_key_descriptor(_SIGNING_CERT), _key_descriptor(_SIGNING_CERT_2)))
     assert parse_idp_metadata(xml).signing_certificates == (_SIGNING_CERT, _SIGNING_CERT_2)

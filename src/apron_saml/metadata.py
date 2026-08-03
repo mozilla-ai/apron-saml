@@ -114,12 +114,13 @@ def _collect_signing_certificates(metadata_root: Element) -> tuple[str, ...]:
     """Return the distinct signing certificates from the metadata's IdP roles, in document order.
 
     Collects every ``<X509Certificate>`` beneath a signing-capable ``<KeyDescriptor>`` — one with
-    ``use="signing"`` or no ``use`` — of an ``<IDPSSODescriptor>``; encryption-only and unrecognized
-    ``use`` keys contribute nothing. A single ``<X509Data>`` may carry a chain of several
-    certificates, so all are read, not just the first. Certificate text is normalized to
-    whitespace-free base64.
+    ``use="signing"`` or no ``use`` — of the entity's direct ``<IDPSSODescriptor>`` roles;
+    encryption-only and unrecognized ``use`` keys contribute nothing. Only direct role descriptors
+    are read, so a nested ``<IDPSSODescriptor>`` (for example one embedded in ``<Extensions>``) cannot
+    smuggle in trust material. A single ``<X509Data>`` may carry a chain of several certificates, so
+    all are read, not just the first. Certificate text is normalized to whitespace-free base64.
     """
-    key_descriptor_path = f".//{{{_MD_NS}}}IDPSSODescriptor/{{{_MD_NS}}}KeyDescriptor"
+    key_descriptor_path = f"./{{{_MD_NS}}}IDPSSODescriptor/{{{_MD_NS}}}KeyDescriptor"
     certificate_path = f".//{{{_DS_NS}}}X509Certificate"
     certificates: list[str] = []
     seen: set[str] = set()
