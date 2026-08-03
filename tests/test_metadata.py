@@ -106,6 +106,12 @@ def test_excludes_encryption_only_certificate() -> None:
     assert parse_idp_metadata(xml).signing_certificates == ()
 
 
+def test_excludes_key_descriptor_with_unrecognized_use() -> None:
+    # An unexpected use value is not signing-eligible; only "signing"/unset keys are trusted.
+    xml = _idp_metadata(key_descriptors=(_key_descriptor(_SIGNING_CERT, use="bogus"),))
+    assert parse_idp_metadata(xml).signing_certificates == ()
+
+
 def test_keeps_only_signing_key_when_both_present() -> None:
     xml = _idp_metadata(
         key_descriptors=(
@@ -139,6 +145,20 @@ def test_rejects_blank_input() -> None:
 def test_rejects_malformed_xml() -> None:
     with pytest.raises(MetadataError):
         parse_idp_metadata("<EntityDescriptor><unclosed>")
+
+
+def test_rejects_metadata_with_entity_declaration() -> None:
+    # A DTD with an entity definition (billion-laughs/XXE vector) must be a domain MetadataError,
+    # not a leaked backend exception.
+    xml = f'<!DOCTYPE EntityDescriptor [<!ENTITY x "y">]><EntityDescriptor xmlns="{_MD}" entityID="{_ENTITY_ID}"/>'
+    with pytest.raises(MetadataError):
+        parse_idp_metadata(xml)
+
+
+def test_rejects_metadata_with_external_entity() -> None:
+    xml = f'<!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><EntityDescriptor xmlns="{_MD}" entityID="&xxe;"/>'
+    with pytest.raises(MetadataError):
+        parse_idp_metadata(xml)
 
 
 def test_rejects_non_entity_descriptor_root() -> None:

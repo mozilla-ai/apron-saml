@@ -17,8 +17,9 @@ from apron_saml.models import IdPDescriptor, SamlConfig
 # are back-channel and not usable here.
 _SSO_BINDING_PREFERENCE = (BINDING_HTTP_REDIRECT, BINDING_HTTP_POST)
 
-# KeyDescriptor use restricting a key to encryption; such keys cannot verify assertion signatures.
-_ENCRYPTION_USE = "encryption"
+# KeyDescriptor ``use`` values whose key may verify an assertion signature: "signing", or unset
+# (a dual-use key). Any other value — "encryption", or an unrecognized use — is excluded.
+_SIGNING_USES = frozenset({None, "", "signing"})
 
 
 def parse_idp_metadata(xml: str) -> IdPDescriptor:
@@ -38,14 +39,18 @@ def parse_idp_metadata(xml: str) -> IdPDescriptor:
         An IdPDescriptor holding the entity ID, selected SSO URL, and signing certificates.
 
     Raises:
-        MetadataError: If the input is not well-formed XML, is not rooted at an EntityDescriptor,
-            names no entityID, describes no identity provider, or advertises no HTTP-Redirect or
-            HTTP-POST single sign-on endpoint.
+        MetadataError: If the input is not well-formed XML, carries a disallowed DTD or entity
+            declaration, is not rooted at an EntityDescriptor, names no entityID, describes no
+            identity provider, or advertises no HTTP-Redirect or HTTP-POST single sign-on endpoint.
     """
     try:
         entity = entity_descriptor_from_string(xml)
     except ParseError as e:
         raise MetadataError("IdP metadata is not well-formed XML") from e
+    except ValueError as e:
+        # The XML-security backend rejects a DTD or entity definition (an XXE/expansion vector) by
+        # raising a ValueError subclass; translate it into a domain error rather than leaking it.
+        raise MetadataError("IdP metadata contains a disallowed DTD or entity declaration") from e
     if entity is None:
         raise MetadataError("IdP metadata root element is not an EntityDescriptor")
 
@@ -98,14 +103,15 @@ def _is_http_url(value: str) -> bool:
 def _collect_signing_certificates(idp_roles: Iterable[IDPSSODescriptor]) -> tuple[str, ...]:
     """Return the distinct signing certificates across the IdP roles, in document order.
 
-    Includes keys explicitly marked for signing and dual-use keys with no ``use``; excludes
-    encryption-only keys. Certificate text is normalized to whitespace-free base64.
+    Includes only keys usable for signing — those with ``use="signing"`` or no ``use`` — and
+    excludes all others, including encryption-only keys and any unrecognized ``use``. Certificate
+    text is normalized to whitespace-free base64.
     """
     certificates: list[str] = []
     seen: set[str] = set()
     for role in idp_roles:
         for key_descriptor in role.key_descriptor:
-            if key_descriptor.use == _ENCRYPTION_USE or key_descriptor.key_info is None:
+            if key_descriptor.use not in _SIGNING_USES or key_descriptor.key_info is None:
                 continue
             for x509_data in key_descriptor.key_info.x509_data:
                 certificate = x509_data.x509_certificate
