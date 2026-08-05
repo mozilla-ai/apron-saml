@@ -73,6 +73,22 @@ class IdPDescriptor:
     sso_url: str
     signing_certificates: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        """Validate that ``sso_url`` is an absolute http or https URL, without userinfo.
+
+        Rejecting other schemes (for example ``javascript:`` or ``data:``) at construction keeps the
+        descriptor from carrying a single sign-on location that is unsafe to use as a request
+        destination.
+
+        Raises:
+            ValueError: If ``sso_url`` is not an absolute http or https URL, or carries userinfo.
+        """
+        parsed = urlparse(self.sso_url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise ValueError("sso_url must be an absolute http or https URL")
+        if "@" in parsed.netloc:
+            raise ValueError("sso_url must not contain userinfo (credentials)")
+
 
 @dataclass(frozen=True)
 class AuthnRequest:

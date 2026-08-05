@@ -81,3 +81,28 @@ def test_idp_descriptor_is_frozen() -> None:
     attr = "entity_id"
     with pytest.raises(FrozenInstanceError):
         setattr(idp, attr, "changed")
+
+
+def test_idp_descriptor_accepts_http_sso_url_for_local_dev() -> None:
+    idp = IdPDescriptor(entity_id=_ISSUER, sso_url="http://localhost:8080/sso")
+    assert idp.sso_url == "http://localhost:8080/sso"
+
+
+def test_idp_descriptor_rejects_non_http_scheme_sso_url() -> None:
+    with pytest.raises(ValueError, match="sso_url"):
+        IdPDescriptor(entity_id=_ISSUER, sso_url="javascript:alert(1)")
+
+
+def test_idp_descriptor_rejects_relative_sso_url() -> None:
+    with pytest.raises(ValueError, match="sso_url"):
+        IdPDescriptor(entity_id=_ISSUER, sso_url="/saml/sso")
+
+
+def test_idp_descriptor_rejects_sso_url_without_host() -> None:
+    with pytest.raises(ValueError, match="sso_url"):
+        IdPDescriptor(entity_id=_ISSUER, sso_url="https://")
+
+
+def test_idp_descriptor_rejects_sso_url_with_userinfo() -> None:
+    with pytest.raises(ValueError, match="userinfo"):
+        IdPDescriptor(entity_id=_ISSUER, sso_url="https://someone@idp.example.com/sso")
