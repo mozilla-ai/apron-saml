@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import binascii
 import zlib
 from xml.etree.ElementTree import Element, ParseError
 
@@ -44,13 +43,16 @@ def decode_response(saml_response_b64: str) -> str:
 
     Raises:
         MalformedResponseError: If the input is blank, is not valid base64, decodes to neither XML
-            text nor a DEFLATE-compressed UTF-8 document, or inflates beyond the maximum decoded size.
+            text nor a single complete DEFLATE-compressed UTF-8 document, or inflates beyond the
+            maximum decoded size.
     """
     if not saml_response_b64.strip():
         raise MalformedResponseError("SAML Response is empty")
     try:
         raw = base64.b64decode("".join(saml_response_b64.split()), validate=True)
-    except binascii.Error as e:
+    except ValueError as e:
+        # A non-ASCII value fails base64's ASCII pre-encode with a bare ValueError; incorrect padding
+        # or non-alphabet characters raise binascii.Error, a ValueError subclass. Both are caught here.
         raise MalformedResponseError("SAML Response is not valid base64") from e
     try:
         text = raw.decode("utf-8")
@@ -67,6 +69,11 @@ def decode_response(saml_response_b64: str) -> str:
         raise MalformedResponseError("SAML Response is neither an XML document nor a DEFLATE-compressed one") from e
     if decompressor.unconsumed_tail:
         raise MalformedResponseError("SAML Response exceeds the maximum decoded size")
+    # decompress() does not raise on a stream that ends early or carries trailing bytes: a truncated
+    # stream leaves eof False, and bytes past the stream end land in unused_data. Reject both here so
+    # a partial or padded document fails at the decoding boundary rather than later, as invalid XML.
+    if not decompressor.eof or decompressor.unused_data:
+        raise MalformedResponseError("SAML Response is not a single complete DEFLATE stream")
     try:
         return inflated.decode("utf-8")
     except UnicodeDecodeError as e:

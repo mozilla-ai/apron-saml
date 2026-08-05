@@ -91,6 +91,30 @@ def test_decode_rejects_decompression_bomb() -> None:
         decode_response(bomb)
 
 
+def test_decode_rejects_non_ascii_input() -> None:
+    # A non-ASCII value fails base64's ASCII pre-encode; it must still surface as a domain error.
+    with pytest.raises(MalformedResponseError):
+        decode_response("abéd")
+
+
+def test_decode_rejects_truncated_deflate_stream() -> None:
+    truncated = base64.b64decode(_deflate_b64(_response()))[:-3]
+    with pytest.raises(MalformedResponseError):
+        decode_response(base64.b64encode(truncated).decode("ascii"))
+
+
+def test_decode_rejects_deflate_with_trailing_garbage() -> None:
+    padded = base64.b64decode(_deflate_b64(_response())) + b"\x00\x01\x02"
+    with pytest.raises(MalformedResponseError):
+        decode_response(base64.b64encode(padded).decode("ascii"))
+
+
+def test_decode_rejects_deflate_payload_that_is_not_utf8() -> None:
+    payload = _deflate_bytes_b64(b"\xff\xfe\x00\x01")
+    with pytest.raises(MalformedResponseError):
+        decode_response(payload)
+
+
 def test_decode_malformed_error_is_catchable_as_saml_error() -> None:
     with pytest.raises(SamlError):
         decode_response("   ")
