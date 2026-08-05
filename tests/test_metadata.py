@@ -1,9 +1,11 @@
 from collections.abc import Iterable
+from xml.etree.ElementTree import Element
 
 import pytest
+from defusedxml.ElementTree import fromstring
 
-from apron_saml import IdPDescriptor, MetadataError, SamlError
-from apron_saml.metadata import parse_idp_metadata
+from apron_saml import IdPDescriptor, MetadataError, SamlConfig, SamlError
+from apron_saml.metadata import generate_sp_metadata, parse_idp_metadata
 
 _ENTITY_ID = "https://idp.example.com/entity"
 _REDIRECT_URL = "https://idp.example.com/sso/redirect"
@@ -21,6 +23,10 @@ _SOAP = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
 _SIGNING_CERT = "signing-certificate-placeholder-one"
 _SIGNING_CERT_2 = "signing-certificate-placeholder-two"
 _ENCRYPTION_CERT = "encryption-certificate-placeholder"
+
+# Service-provider identifiers for exercising generate_sp_metadata.
+_SP_ENTITY_ID = "https://sp.example.com/metadata"
+_ACS_URL = "https://sp.example.com/acs"
 
 
 def _sso(binding: str, location: str) -> str:
@@ -222,3 +228,71 @@ def test_rejects_sso_endpoint_with_non_http_scheme() -> None:
 def test_metadata_error_is_catchable_as_saml_error() -> None:
     with pytest.raises(SamlError):
         parse_idp_metadata("not xml at all")
+
+
+def _sp_config(
+    *,
+    entity_id: str = _SP_ENTITY_ID,
+    acs_url: str = _ACS_URL,
+    want_assertions_signed: bool = True,
+) -> SamlConfig:
+    return SamlConfig(
+        entity_id=entity_id,
+        acs_url=acs_url,
+        idp_metadata=_idp_metadata(),
+        want_assertions_signed=want_assertions_signed,
+    )
+
+
+def _sp_metadata_root(config: SamlConfig) -> Element:
+    # Parsing the output proves it is well-formed XML and lets tests assert its structure.
+    return fromstring(generate_sp_metadata(config))
+
+
+def _spsso_descriptor(config: SamlConfig) -> Element:
+    return _sp_metadata_root(config).find(f"{{{_MD}}}SPSSODescriptor")
+
+
+def test_generate_sp_metadata_returns_str() -> None:
+    assert isinstance(generate_sp_metadata(_sp_config()), str)
+
+
+def test_generated_sp_metadata_is_rooted_at_entity_descriptor() -> None:
+    assert _sp_metadata_root(_sp_config()).tag == f"{{{_MD}}}EntityDescriptor"
+
+
+def test_generated_sp_metadata_entity_id_matches_config() -> None:
+    root = _sp_metadata_root(_sp_config(entity_id="https://sp.other.example/saml"))
+    assert root.get("entityID") == "https://sp.other.example/saml"
+
+
+def test_generated_sp_metadata_advertises_spsso_for_saml2_protocol() -> None:
+    spsso = _spsso_descriptor(_sp_config())
+    assert spsso is not None
+    assert spsso.get("protocolSupportEnumeration") == _PROTOCOL
+
+
+def test_generated_sp_metadata_acs_targets_config_url_over_http_post() -> None:
+    acs = _spsso_descriptor(_sp_config()).find(f"{{{_MD}}}AssertionConsumerService")
+    assert acs.get("Location") == _ACS_URL
+    assert acs.get("Binding") == _POST
+    assert acs.get("index") == "0"
+    assert acs.get("isDefault") == "true"
+
+
+def test_generated_sp_metadata_want_assertions_signed_true_reflects_config() -> None:
+    assert _spsso_descriptor(_sp_config(want_assertions_signed=True)).get("WantAssertionsSigned") == "true"
+
+
+def test_generated_sp_metadata_want_assertions_signed_false_reflects_config() -> None:
+    assert _spsso_descriptor(_sp_config(want_assertions_signed=False)).get("WantAssertionsSigned") == "false"
+
+
+def test_generated_sp_metadata_declares_authn_requests_unsigned() -> None:
+    # The library emits unsigned AuthnRequests and holds no request-signing key.
+    assert _spsso_descriptor(_sp_config()).get("AuthnRequestsSigned") == "false"
+
+
+def test_generated_sp_metadata_omits_key_descriptor() -> None:
+    # No SP signing or encryption certificate is configured, so none is published.
+    assert _spsso_descriptor(_sp_config()).find(f"{{{_MD}}}KeyDescriptor") is None
