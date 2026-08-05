@@ -8,7 +8,13 @@ from xml.etree.ElementTree import Element, ParseError
 
 from defusedxml.ElementTree import fromstring as parse_safe_xml
 from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT
-from saml2.md import IDPSSODescriptor, entity_descriptor_from_string
+from saml2.md import (
+    AssertionConsumerService,
+    EntityDescriptor,
+    IDPSSODescriptor,
+    SPSSODescriptor,
+    entity_descriptor_from_string,
+)
 
 from apron_saml.errors import MetadataError
 from apron_saml.models import IdPDescriptor, SamlConfig
@@ -137,6 +143,43 @@ def _collect_signing_certificates(metadata_root: Element) -> tuple[str, ...]:
     return tuple(certificates)
 
 
+# The only SAML protocol this SP advertises, named in <SPSSODescriptor protocolSupportEnumeration>.
+_SAML2_PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol"
+
+
 def generate_sp_metadata(config: SamlConfig) -> str:
-    """Generate this service provider's SAML metadata document as an XML string."""
-    raise NotImplementedError
+    """Generate this service provider's SAML 2.0 metadata document as an XML string.
+
+    Emits an ``<EntityDescriptor>`` for this service provider (SP) carrying a single
+    ``<SPSSODescriptor>`` with one ``<AssertionConsumerService>`` at ``config.acs_url`` bound to
+    HTTP-POST, the binding this SP receives assertions over. ``WantAssertionsSigned`` reflects
+    ``config.want_assertions_signed``. ``AuthnRequestsSigned`` is false: this library emits unsigned
+    authentication requests and holds no request-signing key. No ``<KeyDescriptor>`` is published, as
+    the configuration carries no SP signing or encryption certificate to advertise.
+
+    Args:
+        config: SP configuration supplying the entityID, assertion consumer URL, and whether signed
+            assertions are wanted.
+
+    Returns:
+        The SP metadata as a SAML 2.0 ``<EntityDescriptor>`` XML string.
+    """
+    entity = EntityDescriptor(
+        entity_id=config.entity_id,
+        spsso_descriptor=[
+            SPSSODescriptor(
+                protocol_support_enumeration=_SAML2_PROTOCOL,
+                authn_requests_signed="false",
+                want_assertions_signed="true" if config.want_assertions_signed else "false",
+                assertion_consumer_service=[
+                    AssertionConsumerService(
+                        binding=BINDING_HTTP_POST,
+                        location=config.acs_url,
+                        index="0",
+                        is_default="true",
+                    )
+                ],
+            )
+        ],
+    )
+    return entity.to_string().decode("utf-8")
