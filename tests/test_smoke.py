@@ -45,6 +45,7 @@ class _FixedClock:
 
 
 def _config() -> SamlConfig:
+    """Return a minimal valid SamlConfig for tests."""
     return SamlConfig(
         entity_id="https://sp.example.com/metadata",
         acs_url="https://sp.example.com/saml/acs",
