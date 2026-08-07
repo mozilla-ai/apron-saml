@@ -124,19 +124,21 @@ def test_decode_malformed_error_is_catchable_as_saml_error() -> None:
 
 
 def test_parse_returns_the_assertion_element() -> None:
-    assertion = parse_response(_response())
-    assert assertion.tag == f"{{{_SAML}}}Assertion"
+    assert parse_response(_response()).assertion.tag == f"{{{_SAML}}}Assertion"
 
 
 def test_parse_returns_the_direct_child_assertion() -> None:
-    assertion = parse_response(_response(body=_assertion("_real")))
-    assert assertion.get("ID") == "_real"
+    assert parse_response(_response(body=_assertion("_real"))).assertion.get("ID") == "_real"
+
+
+def test_parsed_response_carries_source_document() -> None:
+    xml = _response()
+    assert parse_response(xml).response_xml == xml
 
 
 def test_decode_then_parse_roundtrip() -> None:
-    xml = _response(body=_assertion("_a1"))
-    assertion = parse_response(decode_response(_b64(xml)))
-    assert assertion.get("ID") == "_a1"
+    parsed = parse_response(decode_response(_b64(_response(body=_assertion("_a1")))))
+    assert parsed.assertion.get("ID") == "_a1"
 
 
 def test_parse_rejects_non_success_status() -> None:
@@ -205,7 +207,7 @@ def test_parse_rejects_response_with_multiple_assertions() -> None:
 def test_parse_takes_direct_child_over_nested_decoy_assertion() -> None:
     # An assertion smuggled beneath a wrapper must not be selected; the direct child wins.
     body = _assertion("_real") + f"<samlp:Extensions>{_assertion('_fake')}</samlp:Extensions>"
-    assert parse_response(_response(body=body)).get("ID") == "_real"
+    assert parse_response(_response(body=body)).assertion.get("ID") == "_real"
 
 
 def test_parse_rejects_when_only_assertion_is_nested() -> None:
