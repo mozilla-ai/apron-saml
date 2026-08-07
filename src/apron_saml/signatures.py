@@ -5,6 +5,7 @@ from __future__ import annotations
 from xml.etree.ElementTree import Element
 
 from apron_saml.errors import SignatureError
+from apron_saml.response import ParsedResponse
 
 _DS_NS = "http://www.w3.org/2000/09/xmldsig#"
 
@@ -37,3 +38,22 @@ def _require_strong_algorithms(signature: Element) -> None:
     for digest in signature.iterfind(f"{{{_DS_NS}}}SignedInfo/{{{_DS_NS}}}Reference/{{{_DS_NS}}}DigestMethod"):
         if digest.get("Algorithm") not in _ALLOWED_DIGEST_ALGORITHMS:
             raise SignatureError("assertion signature uses a disallowed or missing digest algorithm")
+
+
+def _locate_assertion_signature(parsed: ParsedResponse) -> tuple[Element, str]:
+    """Return the assertion's single enveloped signature and the assertion ID it must cover.
+
+    The signature must be a direct child of the consumed assertion, and its Reference must target the
+    assertion's own ID — the structural half of binding the element verified to the element consumed.
+    """
+    assertion_id = (parsed.assertion.get("ID") or "").strip()
+    if not assertion_id:
+        raise SignatureError("assertion has no ID for its signature to cover")
+    signatures = parsed.assertion.findall(f"{{{_DS_NS}}}Signature")
+    if len(signatures) != 1:
+        raise SignatureError("assertion does not carry exactly one signature")
+    signature = signatures[0]
+    references = [ref.get("URI") for ref in signature.iterfind(f"{{{_DS_NS}}}SignedInfo/{{{_DS_NS}}}Reference")]
+    if references != [f"#{assertion_id}"]:
+        raise SignatureError("assertion signature does not cover the assertion element")
+    return signature, assertion_id

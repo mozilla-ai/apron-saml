@@ -2,9 +2,11 @@ import pytest
 from defusedxml.ElementTree import fromstring
 
 from apron_saml import SignatureError
-from apron_saml.signatures import _require_strong_algorithms
+from apron_saml.response import ParsedResponse
+from apron_saml.signatures import _locate_assertion_signature, _require_strong_algorithms
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
+_SAML = "urn:oasis:names:tc:SAML:2.0:assertion"
 
 _RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
 _SHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
@@ -34,3 +36,44 @@ def test_rejects_sha1_signature() -> None:
 def test_rejects_sha1_digest() -> None:
     with pytest.raises(SignatureError):
         _require_strong_algorithms(_sig(_RSA_SHA256, _SHA1))
+
+
+def _sig_xml(uri: str = "#_a1") -> str:
+    return (
+        f"<ds:Signature><ds:SignedInfo>"
+        f'<ds:SignatureMethod Algorithm="{_RSA_SHA256}"/>'
+        f'<ds:Reference URI="{uri}"><ds:DigestMethod Algorithm="{_SHA256}"/></ds:Reference>'
+        f"</ds:SignedInfo></ds:Signature>"
+    )
+
+
+def _assertion_with(sig_children: str, assertion_id: str = "_a1") -> ParsedResponse:
+    xml = f'<saml:Assertion xmlns:saml="{_SAML}" xmlns:ds="{_DS}" ID="{assertion_id}">{sig_children}</saml:Assertion>'
+    return ParsedResponse(response_xml="<unused/>", assertion=fromstring(xml))
+
+
+def test_locates_single_child_signature() -> None:
+    sig, aid = _locate_assertion_signature(_assertion_with(_sig_xml()))
+    assert aid == "_a1"
+    assert sig.tag == f"{{{_DS}}}Signature"
+
+
+def test_rejects_missing_signature() -> None:
+    with pytest.raises(SignatureError):
+        _locate_assertion_signature(_assertion_with(""))
+
+
+def test_rejects_reference_not_covering_assertion() -> None:
+    with pytest.raises(SignatureError):
+        _locate_assertion_signature(_assertion_with(_sig_xml(uri="#_other")))
+
+
+def test_rejects_missing_assertion_id() -> None:
+    xml = f'<saml:Assertion xmlns:saml="{_SAML}" xmlns:ds="{_DS}">{_sig_xml()}</saml:Assertion>'
+    with pytest.raises(SignatureError):
+        _locate_assertion_signature(ParsedResponse(response_xml="<u/>", assertion=fromstring(xml)))
+
+
+def test_rejects_multiple_signatures() -> None:
+    with pytest.raises(SignatureError):
+        _locate_assertion_signature(_assertion_with(_sig_xml() + _sig_xml()))
