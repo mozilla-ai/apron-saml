@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from xml.etree.ElementTree import Element
 
+from saml2.sigver import CryptoBackendXmlSec1, SecurityContext, XmlsecError, get_xmlsec_binary
+from saml2.sigver import SignatureError as _BackendSignatureError
+
 from apron_saml.errors import SignatureError
+from apron_saml.models import IdPDescriptor
 from apron_saml.response import ParsedResponse
 
 _DS_NS = "http://www.w3.org/2000/09/xmldsig#"
@@ -57,3 +63,54 @@ def _locate_assertion_signature(parsed: ParsedResponse) -> tuple[Element, str]:
     if references != [f"#{assertion_id}"]:
         raise SignatureError("assertion signature does not cover the assertion element")
     return signature, assertion_id
+
+
+_ASSERTION_NODE_NAME = "urn:oasis:names:tc:SAML:2.0:assertion:Assertion"
+
+
+def _pem(cert_body: str) -> str:
+    """Wrap a whitespace-free base64 DER certificate body as a PEM certificate."""
+    lines = "\n".join(cert_body[i : i + 64] for i in range(0, len(cert_body), 64))
+    return f"-----BEGIN CERTIFICATE-----\n{lines}\n-----END CERTIFICATE-----\n"
+
+
+def verify_assertion_signature(parsed: ParsedResponse, idp: IdPDescriptor) -> None:
+    """Verify the consumed assertion's enveloped signature against a configured IdP certificate.
+
+    Raises SignatureError unless the consumed assertion carries exactly one enveloped signature that
+    covers it, uses a strong algorithm, and verifies against one of the IdP's configured signing
+    certificates. In-message KeyInfo is ignored: trust is pinned to the configured certificates, any
+    of which may verify the signature (supporting key rollover).
+
+    Args:
+        parsed: The decoded Response and its located assertion.
+        idp: The identity provider descriptor supplying the pinned signing certificates.
+
+    Raises:
+        SignatureError: If the assertion is unsigned, its signature does not cover it, uses a weak
+            algorithm, or does not verify against any configured certificate.
+    """
+    signature, assertion_id = _locate_assertion_signature(parsed)
+    _require_strong_algorithms(signature)
+    if not idp.signing_certificates:
+        raise SignatureError("no configured IdP certificate to verify the assertion signature")
+
+    context = SecurityContext(CryptoBackendXmlSec1(get_xmlsec_binary()))
+    for cert_body in idp.signing_certificates:
+        with tempfile.TemporaryDirectory() as tmp:
+            cert_file = Path(tmp) / "idp.pem"
+            cert_file.write_text(_pem(cert_body))
+            try:
+                verified = context.verify_signature(
+                    parsed.response_xml,
+                    cert_file=str(cert_file),
+                    cert_type="pem",
+                    node_name=_ASSERTION_NODE_NAME,
+                    node_id=assertion_id,
+                )
+            except (_BackendSignatureError, XmlsecError):
+                # A backend rejection means this certificate did not verify the signature, not a crash.
+                verified = False
+        if verified:
+            return
+    raise SignatureError("assertion signature did not verify against the configured IdP certificate")
