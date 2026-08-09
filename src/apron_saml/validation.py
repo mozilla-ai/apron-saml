@@ -6,13 +6,16 @@ XML-Signature-Wrapping hardening, ``Conditions``, ``SubjectConfirmation``, and r
 
 from __future__ import annotations
 
-from apron_saml.models import SamlConfig, SamlIdentity
+from apron_saml.models import IdPDescriptor, SamlConfig, SamlIdentity
 from apron_saml.protocols import AssertionStore, Clock
+from apron_saml.response import parse_response
+from apron_saml.signatures import verify_assertion_signature
 
 
 def validate_and_extract(
     response_xml: str,
     config: SamlConfig,
+    idp: IdPDescriptor,
     *,
     clock: Clock,
     assertion_store: AssertionStore | None,
@@ -23,4 +26,6 @@ def validate_and_extract(
     Raises a SamlError subclass on the first failed check; returns a SamlIdentity only once every
     security check has passed.
     """
-    raise NotImplementedError
+    parsed = parse_response(response_xml)
+    verify_assertion_signature(parsed, idp)
+    raise NotImplementedError  # Conditions, SubjectConfirmation, replay, and assembly land in #22-#26.

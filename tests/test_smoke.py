@@ -44,11 +44,21 @@ class _FixedClock:
         return self._moment
 
 
+_IDP_METADATA = (
+    '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" '
+    'entityID="https://idp.example.com/entity">'
+    '<IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">'
+    '<SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" '
+    'Location="https://idp.example.com/sso"/>'
+    "</IDPSSODescriptor></EntityDescriptor>"
+)
+
+
 def _config() -> SamlConfig:
     return SamlConfig(
         entity_id="https://sp.example.com/metadata",
         acs_url="https://sp.example.com/saml/acs",
-        idp_metadata="<md/>",
+        idp_metadata=_IDP_METADATA,
     )
 
 
