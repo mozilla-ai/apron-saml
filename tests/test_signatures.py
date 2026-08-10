@@ -1,3 +1,5 @@
+from xml.etree.ElementTree import Element
+
 import pytest
 from defusedxml.ElementTree import fromstring
 from signing_support import self_signed_cert, sign_assertion_response
@@ -19,7 +21,7 @@ _RSA_SHA1 = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
 _SHA1 = "http://www.w3.org/2000/09/xmldsig#sha1"
 
 
-def _sig(sig_alg: str, digest_alg: str):
+def _sig(sig_alg: str, digest_alg: str) -> Element:
     xml = (
         f'<ds:Signature xmlns:ds="{_DS}"><ds:SignedInfo>'
         f'<ds:SignatureMethod Algorithm="{sig_alg}"/>'
@@ -30,7 +32,7 @@ def _sig(sig_alg: str, digest_alg: str):
 
 
 def test_accepts_sha256() -> None:
-    _require_strong_algorithms(_sig(_RSA_SHA256, _SHA256))  # no raise
+    _require_strong_algorithms(_sig(_RSA_SHA256, _SHA256))  # no raise.
 
 
 def test_rejects_sha1_signature() -> None:

@@ -55,7 +55,7 @@ def test_warns_when_assertion_signing_relaxed() -> None:
 def test_silent_when_assertion_signing_required() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        _sp(_idp_metadata())  # default True -> no warning
+        _sp(_idp_metadata())  # default True -> no warning.
 
 
 def test_construction_fails_fast_on_bad_metadata() -> None:

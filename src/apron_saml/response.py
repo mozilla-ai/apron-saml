@@ -34,6 +34,10 @@ class ParsedResponse:
     Bundles the exact decoded document with the single located ``<Assertion>``, built together so the
     element that is verified downstream is the element that is consumed. Nothing here is trustworthy
     until the validation pipeline authenticates it.
+
+    NOTE: ``response_xml`` must already have passed DTD/entity screening; downstream signature
+    verification re-parses it through the XML-security backend, which does not itself reject a DTD.
+    Build instances via ``parse_response`` (which screens) rather than from unscreened input.
     """
 
     response_xml: str

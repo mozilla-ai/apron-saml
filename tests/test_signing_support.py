@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from saml2.sigver import CryptoBackendXmlSec1, SecurityContext, get_xmlsec_binary
 from signing_support import sign_assertion_response
 
@@ -12,7 +14,7 @@ def test_signed_response_has_signature_value() -> None:
     assert "SignatureValue" in sign_assertion_response().response_xml
 
 
-def test_signed_response_verifies_with_its_cert(tmp_path) -> None:
+def test_signed_response_verifies_with_its_cert(tmp_path: Path) -> None:
     signed = sign_assertion_response()
     pem = tmp_path / "c.pem"
     pem.write_text(signed.cert_pem)
