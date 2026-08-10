@@ -11,16 +11,21 @@ _DS = "http://www.w3.org/2000/09/xmldsig#"
 _PROTOCOL = "urn:oasis:names:tc:SAML:2.0:protocol"
 _REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
 
+# A non-empty certificate body is enough for construction/warning tests, which never verify a
+# signature; tests that actually verify pass a real signing certificate via _cert_body().
+_PLACEHOLDER_CERT = "MIIBplaceholdercertbodyForConstructionTestsOnlyAAAAAAAA"
 
-def _idp_metadata(cert_pem: str | None = None) -> str:
+
+def _cert_body(cert_pem: str) -> str:
+    return "".join(cert_pem.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
+
+
+def _idp_metadata(cert_body: str | None = _PLACEHOLDER_CERT) -> str:
     key_descriptor = ""
-    if cert_pem is not None:
-        body = "".join(
-            cert_pem.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split()
-        )
+    if cert_body is not None:
         key_descriptor = (
             f'<KeyDescriptor use="signing"><ds:KeyInfo><ds:X509Data>'
-            f"<ds:X509Certificate>{body}</ds:X509Certificate>"
+            f"<ds:X509Certificate>{cert_body}</ds:X509Certificate>"
             f"</ds:X509Data></ds:KeyInfo></KeyDescriptor>"
         )
     return (
@@ -63,9 +68,14 @@ def test_construction_fails_fast_on_bad_metadata() -> None:
         _sp("<not-entity-descriptor/>")
 
 
+def test_construction_fails_fast_without_signing_certificate() -> None:
+    with pytest.raises(MetadataError):
+        _sp(_idp_metadata(cert_body=None))
+
+
 def test_process_response_rejects_tampered_signature() -> None:
     signed = sign_assertion_response()
-    sp = _sp(_idp_metadata(signed.cert_pem))
+    sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     tampered = signed.response_xml.replace("user@example.com", "attacker@evil.example")
     with pytest.raises(SignatureError):
         sp.process_response(_b64(tampered))
@@ -73,6 +83,6 @@ def test_process_response_rejects_tampered_signature() -> None:
 
 def test_process_response_valid_signature_reaches_unimplemented_steps() -> None:
     signed = sign_assertion_response()
-    sp = _sp(_idp_metadata(signed.cert_pem))
+    sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     with pytest.raises(NotImplementedError):
         sp.process_response(_b64(signed.response_xml))

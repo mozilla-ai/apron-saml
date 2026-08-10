@@ -46,8 +46,12 @@ class _FixedClock:
 
 _IDP_METADATA = (
     '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" '
+    'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" '
     'entityID="https://idp.example.com/entity">'
     '<IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">'
+    '<KeyDescriptor use="signing"><ds:KeyInfo><ds:X509Data>'
+    "<ds:X509Certificate>MIIBplaceholdercertbodyForSmokeTestsOnlyAAAAAAAAAAAA</ds:X509Certificate>"
+    "</ds:X509Data></ds:KeyInfo></KeyDescriptor>"
     '<SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" '
     'Location="https://idp.example.com/sso"/>'
     "</IDPSSODescriptor></EntityDescriptor>"
