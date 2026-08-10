@@ -1,3 +1,4 @@
+import re
 from xml.etree.ElementTree import Element
 
 import pytest
@@ -86,15 +87,15 @@ def test_rejects_multiple_signatures() -> None:
         _locate_assertion_signature(_assertion_with(_sig_xml() + _sig_xml()))
 
 
+def _body(cert_pem: str) -> str:
+    return "".join(cert_pem.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
+
+
 def _idp(*cert_pems: str) -> IdPDescriptor:
-    bodies = tuple(
-        "".join(c.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
-        for c in cert_pems
-    )
     return IdPDescriptor(
         entity_id="https://idp.example.com/entity",
         sso_url="https://idp.example.com/sso",
-        signing_certificates=bodies,
+        signing_certificates=tuple(_body(c) for c in cert_pems),
     )
 
 
@@ -133,3 +134,33 @@ def test_sha1_signature_rejected_end_to_end() -> None:
     signed = sign_assertion_response(algorithm="sha1")
     with pytest.raises(SignatureError):
         verify_assertion_signature(parse_response(signed.response_xml), _idp(signed.cert_pem))
+
+
+def _inject_keyinfo(signed_xml: str, cert_body: str) -> str:
+    """Insert a KeyInfo carrying ``cert_body`` into the assertion's signature (any ds prefix)."""
+    match = re.search(r"</(\w+:)?Signature>", signed_xml)
+    assert match is not None
+    prefix = match.group(1) or ""
+    keyinfo = (
+        f"<{prefix}KeyInfo><{prefix}X509Data>"
+        f"<{prefix}X509Certificate>{cert_body}</{prefix}X509Certificate>"
+        f"</{prefix}X509Data></{prefix}KeyInfo>"
+    )
+    return signed_xml[: match.start()] + keyinfo + signed_xml[match.start() :]
+
+
+def test_rejects_keyinfo_cert_when_configured_cert_differs() -> None:
+    # In-message KeyInfo carrying the real signer cert must not be trusted over the configured cert.
+    key_pem, cert_pem = self_signed_cert()
+    signed = sign_assertion_response(key_pem=key_pem, cert_pem=cert_pem)
+    injected = _inject_keyinfo(signed.response_xml, _body(cert_pem))
+    _, other_pem = self_signed_cert()
+    with pytest.raises(SignatureError):
+        verify_assertion_signature(parse_response(injected), _idp(other_pem))
+
+
+def test_verifies_against_configured_cert_ignoring_unrelated_keyinfo() -> None:
+    signed = sign_assertion_response()
+    _, unrelated_pem = self_signed_cert()
+    injected = _inject_keyinfo(signed.response_xml, _body(unrelated_pem))
+    verify_assertion_signature(parse_response(injected), _idp(signed.cert_pem))

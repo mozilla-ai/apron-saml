@@ -9,6 +9,7 @@ import datetime as _dt
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -86,12 +87,13 @@ def sign_assertion_response(
     template = pre_signature_part(assertion_id, sign_alg=sign_alg, digest_alg=digest_alg).to_string()
     if isinstance(template, bytes):
         template = template.decode()
+    escaped_issuer = escape(issuer)
     unsigned = (
         f'<samlp:Response xmlns:samlp="{_SAMLP}" xmlns:saml="{_SAML}" ID="_r1" Version="2.0">'
-        f"<saml:Issuer>{issuer}</saml:Issuer>"
+        f"<saml:Issuer>{escaped_issuer}</saml:Issuer>"
         f'<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>'
         f'<saml:Assertion ID="{assertion_id}" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">'
-        f"<saml:Issuer>{issuer}</saml:Issuer>{template}"
+        f"<saml:Issuer>{escaped_issuer}</saml:Issuer>{template}"
         f"<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>"
         f"</saml:Assertion></samlp:Response>"
     )
