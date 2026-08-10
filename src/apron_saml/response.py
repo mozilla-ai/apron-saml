@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import zlib
+from dataclasses import dataclass
 from xml.etree.ElementTree import Element, ParseError
 
 from defusedxml.ElementTree import fromstring as parse_safe_xml
@@ -24,6 +25,23 @@ _XML_PROLOGUE = "\ufeff \t\r\n"
 # a cap lets a small payload amplify into a memory-exhaustion denial of service (CWE-409); the bound
 # sits well above any legitimate Response. Limiting the overall request size remains the caller's job.
 _MAX_INFLATED_BYTES = 5 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class ParsedResponse:
+    """Structural, not-yet-authenticated view of a decoded SAML Response.
+
+    Bundles the exact decoded document with the single located ``<Assertion>``, built together so the
+    element that is verified downstream is the element that is consumed. Nothing here is trustworthy
+    until the validation pipeline authenticates it.
+
+    NOTE: ``response_xml`` must already have passed DTD/entity screening; downstream signature
+    verification re-parses it through the XML-security backend, which does not itself reject a DTD.
+    Build instances via ``parse_response`` (which screens) rather than from unscreened input.
+    """
+
+    response_xml: str
+    assertion: Element
 
 
 def decode_response(saml_response_b64: str) -> str:
@@ -80,21 +98,21 @@ def decode_response(saml_response_b64: str) -> str:
         raise MalformedResponseError("SAML Response did not decode to UTF-8 text") from e
 
 
-def parse_response(response_xml: str) -> Element:
-    """Parse a decoded SAML Response, require a successful top-level Status, and return its assertion.
+def parse_response(response_xml: str) -> ParsedResponse:
+    """Parse a decoded SAML Response, require a successful top-level Status, and locate its assertion.
 
     Performs the structural read that precedes security validation: it parses the ``<Response>``,
     checks the top-level ``<StatusCode>``, and locates the assertion. The assertion is taken only from
     a direct-child ``<Assertion>`` of the response — never a descendant — and exactly one is required,
     so a response that wraps or duplicates assertions is rejected rather than resolved arbitrarily. No
-    signature, ``Conditions``, or ``SubjectConfirmation`` check has run, so the returned element is
-    located but not yet trustworthy; authenticating it is the validation pipeline's responsibility.
+    signature, ``Conditions``, or ``SubjectConfirmation`` check has run, so the located assertion is
+    not yet trustworthy; authenticating it is the validation pipeline's responsibility.
 
     Args:
         response_xml: The decoded SAML Response XML, as produced by ``decode_response``.
 
     Returns:
-        The response's single direct-child ``<Assertion>`` element.
+        A ``ParsedResponse`` bundling the source document and its single direct-child ``<Assertion>``.
 
     Raises:
         MalformedResponseError: If the input is not well-formed XML, carries a disallowed DTD or
@@ -123,4 +141,4 @@ def parse_response(response_xml: str) -> Element:
     assertions = response.findall(f"{{{_SAML_NS}}}Assertion")
     if len(assertions) != 1:
         raise MalformedResponseError("SAML Response does not carry exactly one assertion")
-    return assertions[0]
+    return ParsedResponse(response_xml=response_xml, assertion=assertions[0])
