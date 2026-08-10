@@ -138,7 +138,7 @@ def test_sha1_signature_rejected_end_to_end() -> None:
 
 def _inject_keyinfo(signed_xml: str, cert_body: str) -> str:
     """Insert a KeyInfo carrying ``cert_body`` into the assertion's signature (any ds prefix)."""
-    match = re.search(r"</(\w+:)?Signature>", signed_xml)
+    match = re.search(r"</([\w.-]+:)?Signature>", signed_xml)
     assert match is not None
     prefix = match.group(1) or ""
     keyinfo = (
