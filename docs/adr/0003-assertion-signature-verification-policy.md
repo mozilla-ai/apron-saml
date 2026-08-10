@@ -9,7 +9,7 @@
 
 apron-saml is a stateless, Service-Provider-side SAML 2.0 primitive. Response decoding (#19) base64-decodes a Response, checks the top-level Status, and structurally locates the assertion — but performs **no** authentication. Epic 3 must settle, once, what "this assertion is authentic" means, because every downstream check (`Conditions`, `SubjectConfirmation`, replay prevention, identity assembly) trusts that assertion. Signature verification (#20) is the root of trust.
 
-apron-saml sends its `AuthnRequest` over the HTTP-POST binding (`ProtocolBinding=HTTP-POST`), so the POST-binding profile rules govern the inbound Response.
+apron-saml sets `ProtocolBinding=HTTP-POST` on its `AuthnRequest`, requesting that the IdP return the `<Response>` over the HTTP-POST binding, so the POST-binding profile rules govern the inbound Response.
 
 The open questions: must the `<Assertion>` itself be signed, or is a signed `<Response>` sufficient? And how do we drive the vetted backend (ADR 0001) so we verify against the right key, reject weak algorithms, and bind the signature to the exact element we consume?
 
@@ -31,7 +31,7 @@ Supporting design choices:
 
 ### Rationale
 
-- **Normative.** OASIS SAML 2.0 Profiles §4.1.4.2 (*"The `<Assertion>` element(s) in the `<Response>` MUST be signed, if the HTTP POST binding is used…"*) and §4.1.4.5 (*"If the HTTP POST binding is used to deliver the `<Response>`, the enclosed assertion(s) MUST be signed."*).
+- **Normative.** OASIS SAML 2.0 Profiles §4.1.3.5 (*"The `<Assertion>` element(s) in the `<Response>` MUST be signed, if the HTTP POST binding is used…"*) and §4.1.4.5 (*"If the HTTP POST binding is used to deliver the `<Response>`, the enclosed assertion(s) MUST be signed."*).
 - **Interoperable.** Okta, Microsoft Entra/Azure AD, and Google Workspace (by default) all sign the assertion. Google's "Signed response" is unchecked by default (first-party: *"If this is unchecked (the default), only the assertion within the response is signed."*) — response-only signing is an operator opt-in, not the norm.
 - **OWASP-aligned defense in depth.** Pin the certificate and ignore in-message `KeyInfo`, verify the `ds:Reference` covers the consumed element (XML Signature Wrapping defense), and reject SHA-1.
 - **Fail-closed by default;** any relaxation is explicit and documented, never silent.
