@@ -24,6 +24,12 @@ dependencies = [
     # <X509Certificate> in an <X509Data> — pysaml2's object model keeps only the last. Declared here
     # because we import it, not just rely on it transitively.
     "defusedxml>=0.7.1",
+    # Pure-Python XSD validator (no lxml/compiled footprint — consistent with ADR 0001). Already pulled
+    # in transitively by pysaml2; declared here because we import it directly for the XSW hardened-schema
+    # check (#21, ADR 0004). No hard upper cap: a cap in a library propagates resolution conflicts and
+    # xmlschema is also a pysaml2 transitive dep; the content-model canary test (test_wrapping) guards
+    # against a behavior-breaking future major.
+    "xmlschema>=2.5",
 ]
 
 [dependency-groups]
@@ -56,7 +62,7 @@ exclude = ["tests", "tests.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"*" = ["py.typed"]
+"apron_saml" = ["py.typed", "schemas/*.xsd", "schemas/*.md"]
 
 [tool.setuptools_scm]
 
