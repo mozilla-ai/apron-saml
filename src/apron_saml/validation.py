@@ -10,6 +10,7 @@ from apron_saml.models import IdPDescriptor, SamlConfig, SamlIdentity
 from apron_saml.protocols import AssertionStore, Clock
 from apron_saml.response import parse_response
 from apron_saml.signatures import verify_assertion_signature
+from apron_saml.wrapping import reject_signature_wrapping
 
 
 def validate_and_extract(
@@ -24,9 +25,10 @@ def validate_and_extract(
     """Validate a decoded SAML Response end to end and return the extracted identity.
 
     Runs the SP-side security checks in trust order, returning a SamlIdentity only once every check
-    has passed and raising a SamlError subclass on the first failure. Signature verification is
-    enforced today; the remaining Conditions, SubjectConfirmation, replay, and assembly steps are not
-    yet implemented and raise NotImplementedError until they land.
+    has passed and raising a SamlError subclass on the first failure. XSW hardening and signature
+    verification are enforced today, with XSW hardening running first so a wrapped assertion is
+    rejected before any signature is trusted; the remaining Conditions, SubjectConfirmation, replay,
+    and assembly steps are not yet implemented and raise NotImplementedError until they land.
 
     Args:
         response_xml: The decoded SAML Response XML, as produced by decode_response.
@@ -43,5 +45,6 @@ def validate_and_extract(
         SamlError: On the first failed security check (for example a signature that does not verify).
     """
     parsed = parse_response(response_xml)
+    reject_signature_wrapping(parsed)
     verify_assertion_signature(parsed, idp)
     raise NotImplementedError  # Conditions, SubjectConfirmation, replay, and assembly land in #22-#26.
