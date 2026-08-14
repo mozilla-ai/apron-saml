@@ -60,12 +60,13 @@ def _reject_ambiguous_ids(parsed: ParsedResponse, assertion_id: str) -> None:
 _SIGNATURE_TAG = f"{{{_DS_NS}}}Signature"
 
 
-def _reject_extra_signatures(parsed: ParsedResponse) -> None:
-    """Reject the assertion if it carries more than one signature anywhere in its subtree.
+def _require_sole_assertion_signature(parsed: ParsedResponse) -> None:
+    """Reject the assertion unless it carries exactly one signature anywhere in its subtree.
 
-    With the sole-assertion check, exactly one ``<ds:Signature>`` in the assertion subtree proves the
-    single signature is the direct-child enveloped one, and closes a signature planted in an
-    open-content slot (``SubjectConfirmationData``/``AttributeValue``/``Advice``).
+    Both zero signatures (unsigned) and more than one are rejected. With the sole-assertion check,
+    exactly one ``<ds:Signature>`` in the assertion subtree proves the single signature is the
+    direct-child enveloped one, and closes a signature planted in an open-content slot
+    (``SubjectConfirmationData``/``AttributeValue``/``Advice``).
     """
     signatures = [e for e in parsed.assertion.iter() if e.tag == _SIGNATURE_TAG]
     if len(signatures) != 1:
@@ -87,4 +88,4 @@ def reject_signature_wrapping(parsed: ParsedResponse) -> None:
     """
     assertion_id = _require_sole_consumed_assertion(parsed)
     _reject_ambiguous_ids(parsed, assertion_id)
-    _reject_extra_signatures(parsed)
+    _require_sole_assertion_signature(parsed)
