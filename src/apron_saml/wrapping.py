@@ -78,14 +78,15 @@ def _require_sole_assertion_signature(parsed: ParsedResponse) -> None:
     """
     signatures = [e for e in parsed.assertion.iter() if e.tag == _SIGNATURE_TAG]
     if len(signatures) != 1:
-        raise MalformedResponseError("assertion does not carry exactly one signature")
+        raise MalformedResponseError("assertion does not carry exactly one signature in its subtree")
 
 
 class SchemaBundleError(Exception):
     """The vendored SAML schema bundle could not be loaded — a packaging/deployment fault.
 
     This is not a SAML-message failure and is deliberately not a ``SamlError``: it signals a broken
-    installation (missing or corrupt bundled XSDs), which a CI canary test must catch before release.
+    installation (missing or corrupt bundled XSDs), so a packaging fault is never mistaken for a
+    malformed message.
     """
 
 
@@ -126,8 +127,8 @@ def _reject_schema_invalid_assertion(parsed: ParsedResponse) -> None:
     ``AttributeValue`` validates regardless of where its prefix is declared; ``schema_path`` binds
     the anchored selection to the ``Assertion`` global declaration so the content model is enforced.
     """
-    namespaces = {**_document_namespaces(parsed.response_xml), **_SCHEMA_NS}
     try:
+        namespaces = {**_document_namespaces(parsed.response_xml), **_SCHEMA_NS}
         valid = _assertion_schema().is_valid(
             parsed.response_xml,
             path="saml:Assertion",

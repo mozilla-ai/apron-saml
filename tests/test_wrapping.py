@@ -4,7 +4,8 @@ import pytest
 from defusedxml.ElementTree import fromstring
 from signing_support import sign_assertion_response
 
-from apron_saml.errors import MalformedResponseError
+import apron_saml.wrapping as wrapping
+from apron_saml.errors import MalformedResponseError, SamlError
 from apron_saml.response import ParsedResponse
 from apron_saml.wrapping import reject_signature_wrapping
 
@@ -170,3 +171,16 @@ def test_schema_is_valid_is_reentrant_under_threads() -> None:
     ok = _valid_response_xml()
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
         list(ex.map(lambda _: reject_signature_wrapping(_wrap(ok)), range(32)))  # no raise.
+
+
+def test_broken_bundle_raises_schema_bundle_error(monkeypatch, tmp_path) -> None:
+    # Point the bundle lookup at an empty directory so the XSD build fails, and confirm the
+    # translated exception is NOT a SamlError (it signals a packaging fault, not a bad message).
+    wrapping._assertion_schema.cache_clear()
+    monkeypatch.setattr(wrapping, "files", lambda _pkg: tmp_path)
+    try:
+        with pytest.raises(wrapping.SchemaBundleError):
+            wrapping._assertion_schema()
+        assert not issubclass(wrapping.SchemaBundleError, SamlError)
+    finally:
+        wrapping._assertion_schema.cache_clear()  # restore so later tests rebuild the real schema.
