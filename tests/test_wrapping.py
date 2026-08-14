@@ -94,3 +94,19 @@ def test_duplicate_xml_id_rejected() -> None:
 def test_unique_ids_pass() -> None:
     xml = _mutate(sibling='<samlp:Extra ID="_other"/>')
     reject_signature_wrapping(_wrap(xml))  # no raise.
+
+
+_EXTRA_SIG = f'<ds:Signature xmlns:ds="{_DS}"><ds:SignedInfo/></ds:Signature>'
+
+
+def test_second_signature_in_assertion_subtree_rejected() -> None:
+    # A second <ds:Signature> anywhere inside the assertion (2 total in the subtree) is rejected.
+    xml = _mutate(in_assertion=_EXTRA_SIG)
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
+
+
+def test_response_level_signature_not_rejected() -> None:
+    # A signature OUTSIDE the assertion subtree (a Response sibling) is legitimate — check 3 ignores it.
+    xml = _mutate(sibling=_EXTRA_SIG)
+    reject_signature_wrapping(_wrap(xml))  # no raise (assertion subtree still has exactly one signature).
