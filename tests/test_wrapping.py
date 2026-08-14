@@ -68,3 +68,27 @@ def test_consumed_assertion_not_the_tree_assertion_rejected() -> None:
     parsed = ParsedResponse(response_xml=base, assertion=other, root=root)
     with pytest.raises(MalformedResponseError):
         reject_signature_wrapping(parsed)
+
+
+def test_duplicate_id_value_across_elements_rejected() -> None:
+    # A NON-ID attribute reusing the assertion's ID value must still be caught (decisive value rule).
+    xml = _mutate(sibling='<samlp:Extra foo="_a1"/>')
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
+
+
+def test_duplicate_typed_id_rejected() -> None:
+    xml = _mutate(sibling='<samlp:Extra ID="_a1"/>')  # same ID-typed value on another element.
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
+
+
+def test_duplicate_xml_id_rejected() -> None:
+    xml = _mutate(sibling='<samlp:A xml:id="dup"/><samlp:B xml:id="dup"/>')
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
+
+
+def test_unique_ids_pass() -> None:
+    xml = _mutate(sibling='<samlp:Extra ID="_other"/>')
+    reject_signature_wrapping(_wrap(xml))  # no raise.
