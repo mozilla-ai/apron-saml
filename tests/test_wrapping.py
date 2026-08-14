@@ -78,7 +78,9 @@ def test_duplicate_id_value_across_elements_rejected() -> None:
 
 
 def test_duplicate_typed_id_rejected() -> None:
-    xml = _mutate(sibling='<samlp:Extra ID="_a1"/>')  # same ID-typed value on another element.
+    # Isolate the typed-ID branch (Id name, xmldsig spelling) with a value distinct from the
+    # assertion's own ID, so the decisive-value rule does not mask it.
+    xml = _mutate(sibling='<samlp:A Id="dup2"/><samlp:B Id="dup2"/>')
     with pytest.raises(MalformedResponseError):
         reject_signature_wrapping(_wrap(xml))
 
