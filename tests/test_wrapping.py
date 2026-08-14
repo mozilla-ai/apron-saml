@@ -110,3 +110,63 @@ def test_response_level_signature_not_rejected() -> None:
     # A signature OUTSIDE the assertion subtree (a Response sibling) is legitimate — check 3 ignores it.
     xml = _mutate(sibling=_EXTRA_SIG)
     reject_signature_wrapping(_wrap(xml))  # no raise (assertion subtree still has exactly one signature).
+
+
+_XS = "http://www.w3.org/2001/XMLSchema"
+_XSI = "http://www.w3.org/2001/XMLSchema-instance"
+# A valid AttributeStatement whose AttributeValue uses a NON-STANDARD prefix (zz) bound to the XSD
+# namespace for xsi:type — must resolve from the document's own bindings.
+_ATTR_STMT_XSI = (
+    '<saml:AttributeStatement><saml:Attribute Name="x">'
+    f'<saml:AttributeValue xmlns:xsi="{_XSI}" xmlns:zz="{_XS}" xsi:type="zz:string">v</saml:AttributeValue>'
+    "</saml:Attribute></saml:AttributeStatement>"
+)
+# Same shape, but xsi:type names a type in a namespace not in the bundle — xmlschema cannot resolve it.
+_ATTR_STMT_CUSTOM = (
+    '<saml:AttributeStatement><saml:Attribute Name="x">'
+    f'<saml:AttributeValue xmlns:xsi="{_XSI}" xmlns:c="urn:custom" xsi:type="c:Missing">v</saml:AttributeValue>'
+    "</saml:Attribute></saml:AttributeStatement>"
+)
+
+
+def test_real_signed_assertion_passes_schema() -> None:
+    reject_signature_wrapping(_wrap(_valid_response_xml()))  # no raise.
+
+
+def test_assertion_with_disallowed_child_rejected() -> None:
+    xml = _mutate(in_assertion="<saml:Bogus/>")  # not in AssertionType's content model.
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
+
+
+def test_attribute_statement_with_xsi_type_passes() -> None:
+    reject_signature_wrapping(_wrap(_mutate(in_assertion=_ATTR_STMT_XSI)))  # no raise.
+
+
+def test_unresolvable_custom_xsi_type_is_domain_error() -> None:
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(_mutate(in_assertion=_ATTR_STMT_CUSTOM)))
+
+
+def test_schema_build_is_offline_and_ignores_hostile_schemalocation() -> None:
+    hostile = _valid_response_xml().replace(
+        "<saml:Assertion ",
+        '<saml:Assertion xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+        'xsi:schemaLocation="urn:oasis:names:tc:SAML:2.0:assertion http://127.0.0.1:9/evil.xsd" ',
+        1,
+    )
+    reject_signature_wrapping(_wrap(hostile))  # no network, still validates.
+
+
+def test_disallowed_child_is_the_version_canary() -> None:
+    # If a future xmlschema makes this pass, the schema check is toothless — treat as a hard failure.
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(_mutate(in_assertion="<saml:Bogus/>")))
+
+
+def test_schema_is_valid_is_reentrant_under_threads() -> None:
+    import concurrent.futures
+
+    ok = _valid_response_xml()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(lambda _: reject_signature_wrapping(_wrap(ok)), range(32)))  # no raise.

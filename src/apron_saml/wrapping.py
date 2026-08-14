@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import functools
+import io
+from importlib.resources import as_file, files
 from xml.etree.ElementTree import Element
+
+import xmlschema
+from defusedxml.ElementTree import iterparse
 
 from apron_saml.errors import MalformedResponseError
 from apron_saml.response import ParsedResponse
@@ -10,6 +16,8 @@ from apron_saml.response import ParsedResponse
 _SAML_NS = "urn:oasis:names:tc:SAML:2.0:assertion"
 _DS_NS = "http://www.w3.org/2000/09/xmldsig#"
 _ASSERTION_TAG = f"{{{_SAML_NS}}}Assertion"
+# Prefix for the anchored XPath selection only; xsi:type resolves from the document's own bindings.
+_SCHEMA_NS = {"saml": _SAML_NS}
 
 
 def _require_sole_consumed_assertion(parsed: ParsedResponse) -> str:
@@ -73,6 +81,68 @@ def _require_sole_assertion_signature(parsed: ParsedResponse) -> None:
         raise MalformedResponseError("assertion does not carry exactly one signature")
 
 
+class SchemaBundleError(Exception):
+    """The vendored SAML schema bundle could not be loaded — a packaging/deployment fault.
+
+    This is not a SAML-message failure and is deliberately not a ``SamlError``: it signals a broken
+    installation (missing or corrupt bundled XSDs), which a CI canary test must catch before release.
+    """
+
+
+@functools.cache
+def _assertion_schema() -> xmlschema.XMLSchema:
+    """Build (once) the offline SAML assertion schema from the vendored bundle."""
+    try:
+        with as_file(files("apron_saml") / "schemas") as schema_dir:
+            return xmlschema.XMLSchema(
+                str(schema_dir / "saml-schema-assertion-2.0.xsd"),
+                base_url=str(schema_dir),
+                allow="sandbox",
+            )
+    except Exception as e:  # noqa: BLE001 — any build failure is a broken bundle, re-raised as our own.
+        raise SchemaBundleError("the bundled SAML assertion schema failed to load") from e
+
+
+def _document_namespaces(response_xml: str) -> dict[str, str]:
+    """Return the prefix-to-URI namespace declarations found anywhere in the decoded Response.
+
+    ElementTree discards ``xmlns`` declarations, so an ``xsi:type`` QName declared below the
+    assertion element cannot otherwise resolve during schema validation; ``start-ns`` events
+    recover every declaration (the first binding of each prefix wins, so an inner rebinding of a
+    prefix does not shadow the outer one). The Response has already passed the DTD/entity screening
+    in ``parse_response``, so this reparse expands nothing.
+    """
+    namespaces: dict[str, str] = {}
+    for _event, (prefix, uri) in iterparse(io.StringIO(response_xml), events=("start-ns",)):
+        namespaces.setdefault(prefix, uri)
+    return namespaces
+
+
+def _reject_schema_invalid_assertion(parsed: ParsedResponse) -> None:
+    """Reject the consumed assertion if it does not conform to the hardened local assertion schema.
+
+    Validates from the response string so ``xmlschema`` resolves ``xsi:type`` QNames from the
+    document's own namespace declarations, recovered via ``start-ns`` so a legitimately-typed
+    ``AttributeValue`` validates regardless of where its prefix is declared; ``schema_path`` binds
+    the anchored selection to the ``Assertion`` global declaration so the content model is enforced.
+    """
+    namespaces = {**_document_namespaces(parsed.response_xml), **_SCHEMA_NS}
+    try:
+        valid = _assertion_schema().is_valid(
+            parsed.response_xml,
+            path="saml:Assertion",
+            schema_path="saml:Assertion",
+            namespaces=namespaces,
+            allow_empty=False,
+        )
+    except SchemaBundleError:
+        raise
+    except Exception as e:  # noqa: BLE001 — any validator error over attacker input is a rejection.
+        raise MalformedResponseError("assertion does not conform to the SAML assertion schema") from e
+    if not valid:
+        raise MalformedResponseError("assertion does not conform to the SAML assertion schema")
+
+
 def reject_signature_wrapping(parsed: ParsedResponse) -> None:
     """Reject a decoded SAML Response that shows any XML-Signature-Wrapping indicator.
 
@@ -89,3 +159,4 @@ def reject_signature_wrapping(parsed: ParsedResponse) -> None:
     assertion_id = _require_sole_consumed_assertion(parsed)
     _reject_ambiguous_ids(parsed, assertion_id)
     _require_sole_assertion_signature(parsed)
+    _reject_schema_invalid_assertion(parsed)
