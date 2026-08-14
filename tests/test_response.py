@@ -215,3 +215,9 @@ def test_parse_rejects_when_only_assertion_is_nested() -> None:
     body = f"<samlp:Extensions>{_assertion('_fake')}</samlp:Extensions>"
     with pytest.raises(MalformedResponseError):
         parse_response(_response(body=body))
+
+
+def test_parsed_response_carries_root_element() -> None:
+    parsed = parse_response(_response())
+    assert parsed.root.tag == f"{{{_SAMLP}}}Response"
+    assert parsed.assertion in list(parsed.root)
