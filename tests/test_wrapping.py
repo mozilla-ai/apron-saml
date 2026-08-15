@@ -97,6 +97,23 @@ def test_unique_ids_pass() -> None:
     reject_signature_wrapping(_wrap(xml))  # no raise.
 
 
+def test_whitespace_padded_id_colliding_after_normalization_rejected() -> None:
+    # xml:id/xs:ID use XML whitespace normalization, so a padded value that collapses to the
+    # assertion's own ID must still trip the decisive-value rule (an XML-security backend resolves
+    # it to the same element the raw-value comparison would miss).
+    xml = _mutate(sibling='<samlp:Extra xml:id=" _a1 "/>')
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
+
+
+def test_duplicate_typed_id_after_whitespace_normalization_rejected() -> None:
+    # Two typed-ID values differing only in surrounding whitespace collapse to the same ID under
+    # XML whitespace normalization.
+    xml = _mutate(sibling='<samlp:A Id="dup2"/><samlp:B Id=" dup2 "/>')
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
+
+
 _EXTRA_SIG = f'<ds:Signature xmlns:ds="{_DS}"><ds:SignedInfo/></ds:Signature>'
 
 

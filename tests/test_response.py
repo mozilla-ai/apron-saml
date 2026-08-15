@@ -184,6 +184,18 @@ def test_parse_rejects_response_with_entity_declaration() -> None:
         parse_response(xml)
 
 
+def test_parse_rejects_response_with_entity_free_dtd() -> None:
+    # A DTD with no entity declarations can still declare ID-typed attributes that libxml2 honors
+    # but the ElementTree-based checks miss; reject any DOCTYPE outright, not just ones with entities.
+    xml = (
+        f"<!DOCTYPE samlp:Response>"
+        f'<samlp:Response xmlns:samlp="{_SAMLP}" xmlns:saml="{_SAML}">'
+        f"{_status()}{_assertion()}</samlp:Response>"
+    )
+    with pytest.raises(MalformedResponseError):
+        parse_response(xml)
+
+
 def test_parse_rejects_response_with_external_entity() -> None:
     xml = (
         f'<!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'

@@ -43,26 +43,35 @@ _XML_ID = "{http://www.w3.org/XML/1998/namespace}id"
 _ID_ATTRS = ("ID", "Id", _XML_ID)
 
 
+def _normalize_id(value: str) -> str:
+    """Collapse XML whitespace in an ID value (matches xml:id/xs:ID normalization)."""
+    return " ".join(value.split())
+
+
 def _reject_ambiguous_ids(parsed: ParsedResponse, assertion_id: str) -> None:
     """Reject the document if the assertion ID is reusable or any ID-typed value is shared.
 
     Decisive rule: the consumed assertion's ID value must not appear as any attribute value on any
     other element, so the backend cannot resolve that ID to a different element. Defense-in-depth:
-    no ID-typed attribute value (``ID``/``Id``/``xml:id``) may appear on more than one element.
+    no ID-typed attribute value (``ID``/``Id``/``xml:id``) may appear on more than one element. Both
+    rules compare under XML whitespace normalization (``xml:id``/``xs:ID`` collapse whitespace), so a
+    padded value cannot evade a comparison the XML-security backend would still resolve as equal.
     """
+    normalized_assertion_id = _normalize_id(assertion_id)
     typed_id_values: dict[str, Element] = {}
     for element in parsed.root.iter():
         if element is not parsed.assertion:
             for value in element.attrib.values():
-                if value == assertion_id:
+                if _normalize_id(value) == normalized_assertion_id:
                     raise MalformedResponseError("assertion ID is not unique in the SAML Response")
         for name in _ID_ATTRS:
             value = element.get(name)
             if value is None:
                 continue
-            if value in typed_id_values and typed_id_values[value] is not element:
+            normalized_value = _normalize_id(value)
+            if normalized_value in typed_id_values and typed_id_values[normalized_value] is not element:
                 raise MalformedResponseError("SAML Response reuses an element ID")
-            typed_id_values[value] = element
+            typed_id_values[normalized_value] = element
 
 
 _SIGNATURE_TAG = f"{{{_DS_NS}}}Signature"
@@ -114,7 +123,7 @@ def _document_namespaces(response_xml: str) -> dict[str, str]:
     in ``parse_response``, so this reparse expands nothing.
     """
     namespaces: dict[str, str] = {}
-    for _event, (prefix, uri) in iterparse(io.StringIO(response_xml), events=("start-ns",)):
+    for _event, (prefix, uri) in iterparse(io.StringIO(response_xml), events=("start-ns",), forbid_dtd=True):
         namespaces.setdefault(prefix, uri)
     return namespaces
 

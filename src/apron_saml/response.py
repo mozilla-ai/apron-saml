@@ -127,7 +127,7 @@ def parse_response(response_xml: str) -> ParsedResponse:
         StatusError: If the top-level ``<StatusCode>`` is not the success status.
     """
     try:
-        response = parse_safe_xml(response_xml)
+        response = parse_safe_xml(response_xml, forbid_dtd=True)
     except ParseError as e:
         raise MalformedResponseError("SAML Response is not well-formed XML") from e
     except ValueError as e:
