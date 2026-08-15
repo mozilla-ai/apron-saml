@@ -4,7 +4,7 @@ import pytest
 from defusedxml.ElementTree import fromstring
 from signing_support import sign_assertion_response
 
-import apron_saml.wrapping as wrapping
+from apron_saml import wrapping
 from apron_saml.errors import MalformedResponseError, SamlError
 from apron_saml.response import ParsedResponse
 from apron_saml.wrapping import reject_signature_wrapping
@@ -128,6 +128,23 @@ def test_response_level_signature_not_rejected() -> None:
     # A signature OUTSIDE the assertion subtree (a Response sibling) is legitimate — check 3 ignores it.
     xml = _mutate(sibling=_EXTRA_SIG)
     reject_signature_wrapping(_wrap(xml))  # no raise (assertion subtree still has exactly one signature).
+
+
+def test_zero_signatures_rejected() -> None:
+    # A hand-built, otherwise-valid single assertion carrying NO signature must reach check 3 (having
+    # cleared checks 1 and 2 — one unambiguous assertion, no ID collisions) and be rejected there: the
+    # `!= 1` predicate in _require_sole_assertion_signature rejects zero signatures, not just >1.
+    xml = (
+        f'<samlp:Response xmlns:samlp="{_SAMLP}" xmlns:saml="{_SAML}" ID="_r1" Version="2.0">'
+        f"<saml:Issuer>https://idp.example.com/entity</saml:Issuer>"
+        f'<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>'
+        f'<saml:Assertion ID="_a1" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">'
+        f"<saml:Issuer>https://idp.example.com/entity</saml:Issuer>"
+        f"<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>"
+        f"</saml:Assertion></samlp:Response>"
+    )
+    with pytest.raises(MalformedResponseError):
+        reject_signature_wrapping(_wrap(xml))
 
 
 _XS = "http://www.w3.org/2001/XMLSchema"
