@@ -165,6 +165,7 @@ def reject_signature_wrapping(parsed: ParsedResponse) -> None:
 
     Raises:
         MalformedResponseError: If any wrapping, ID-ambiguity, or schema-conformance check fails.
+        SchemaBundleError: If the bundled schema could not be loaded — a packaging/deployment fault.
     """
     assertion_id = _require_sole_consumed_assertion(parsed)
     _reject_ambiguous_ids(parsed, assertion_id)

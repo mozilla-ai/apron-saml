@@ -2,8 +2,9 @@
 
 This directory vendors the authoritative OASIS/W3C XML Schema (XSD) documents needed to validate a
 SAML 2.0 `<saml:Assertion>` against its full content model offline. The runtime never fetches these
-over the network — they ship with the package so schema validation works with no external
-dependency and no risk of resolving a schema from an attacker-controlled or unreachable location.
+over the network — they ship with the package so schema validation works with no external schema or
+network dependency and no risk of resolving a schema from an attacker-controlled or unreachable
+location.
 
 ## Files
 
