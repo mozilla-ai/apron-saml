@@ -35,6 +35,10 @@ class ParsedResponse:
     element that is verified downstream is the element that is consumed. Nothing here is trustworthy
     until the validation pipeline authenticates it.
 
+    ``root`` is the parsed ``<Response>``; ``response_xml``, ``root``, and ``assertion`` derive from
+    one parse. The ``Element`` trees are shared, mutable views over the parsed document and must not
+    be mutated.
+
     NOTE: ``response_xml`` must already have passed DTD/entity screening; downstream signature
     verification re-parses it through the XML-security backend, which does not itself reject a DTD.
     Build instances via ``parse_response`` (which screens) rather than from unscreened input.
@@ -42,6 +46,7 @@ class ParsedResponse:
 
     response_xml: str
     assertion: Element
+    root: Element
 
 
 def decode_response(saml_response_b64: str) -> str:
@@ -112,7 +117,8 @@ def parse_response(response_xml: str) -> ParsedResponse:
         response_xml: The decoded SAML Response XML, as produced by ``decode_response``.
 
     Returns:
-        A ``ParsedResponse`` bundling the source document and its single direct-child ``<Assertion>``.
+        A ``ParsedResponse`` bundling the source document, its parsed ``<Response>`` root, and the
+        single direct-child ``<Assertion>``.
 
     Raises:
         MalformedResponseError: If the input is not well-formed XML, carries a disallowed DTD or
@@ -121,7 +127,7 @@ def parse_response(response_xml: str) -> ParsedResponse:
         StatusError: If the top-level ``<StatusCode>`` is not the success status.
     """
     try:
-        response = parse_safe_xml(response_xml)
+        response = parse_safe_xml(response_xml, forbid_dtd=True)
     except ParseError as e:
         raise MalformedResponseError("SAML Response is not well-formed XML") from e
     except ValueError as e:
@@ -141,4 +147,4 @@ def parse_response(response_xml: str) -> ParsedResponse:
     assertions = response.findall(f"{{{_SAML_NS}}}Assertion")
     if len(assertions) != 1:
         raise MalformedResponseError("SAML Response does not carry exactly one assertion")
-    return ParsedResponse(response_xml=response_xml, assertion=assertions[0])
+    return ParsedResponse(response_xml=response_xml, assertion=assertions[0], root=response)

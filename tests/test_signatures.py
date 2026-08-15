@@ -15,6 +15,7 @@ from apron_saml.signatures import (
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
 _SAML = "urn:oasis:names:tc:SAML:2.0:assertion"
+_SAMLP = "urn:oasis:names:tc:SAML:2.0:protocol"
 
 _RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
 _SHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
@@ -56,8 +57,14 @@ def _sig_xml(uri: str = "#_a1") -> str:
 
 
 def _assertion_with(sig_children: str, assertion_id: str = "_a1") -> ParsedResponse:
-    xml = f'<saml:Assertion xmlns:saml="{_SAML}" xmlns:ds="{_DS}" ID="{assertion_id}">{sig_children}</saml:Assertion>'
-    return ParsedResponse(response_xml="<unused/>", assertion=fromstring(xml))
+    saml, ds = _SAML, _DS
+    inner = f'<saml:Assertion xmlns:saml="{saml}" xmlns:ds="{ds}" ID="{assertion_id}">{sig_children}</saml:Assertion>'
+    response_xml = (
+        f'<samlp:Response xmlns:samlp="{_SAMLP}" xmlns:saml="{saml}" xmlns:ds="{ds}">{inner}</samlp:Response>'
+    )
+    root = fromstring(response_xml)
+    assertion = root.find(f"{{{saml}}}Assertion")
+    return ParsedResponse(response_xml=response_xml, assertion=assertion, root=root)
 
 
 def test_locates_single_child_signature() -> None:
@@ -77,9 +84,14 @@ def test_rejects_reference_not_covering_assertion() -> None:
 
 
 def test_rejects_missing_assertion_id() -> None:
-    xml = f'<saml:Assertion xmlns:saml="{_SAML}" xmlns:ds="{_DS}">{_sig_xml()}</saml:Assertion>'
+    inner = f'<saml:Assertion xmlns:saml="{_SAML}" xmlns:ds="{_DS}">{_sig_xml()}</saml:Assertion>'
+    response_xml = (
+        f'<samlp:Response xmlns:samlp="{_SAMLP}" xmlns:saml="{_SAML}" xmlns:ds="{_DS}">{inner}</samlp:Response>'
+    )
+    root = fromstring(response_xml)
+    assertion = root.find(f"{{{_SAML}}}Assertion")
     with pytest.raises(SignatureError):
-        _locate_assertion_signature(ParsedResponse(response_xml="<u/>", assertion=fromstring(xml)))
+        _locate_assertion_signature(ParsedResponse(response_xml=response_xml, assertion=assertion, root=root))
 
 
 def test_rejects_multiple_signatures() -> None:

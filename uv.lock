@@ -14,6 +14,7 @@ dependencies = [
     { name = "defusedxml" },
     { name = "pyopenssl" },
     { name = "pysaml2" },
+    { name = "xmlschema" },
 ]
 
 [package.dev-dependencies]
@@ -44,6 +45,7 @@ requires-dist = [
     { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pysaml2", specifier = ">=7.5,<8" },
+    { name = "xmlschema", specifier = ">=2.5" },
 ]
 
 [package.metadata.requires-dev]
