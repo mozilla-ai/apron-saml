@@ -79,8 +79,9 @@ def test_non_id_attribute_equal_to_assertion_id_allowed() -> None:
 
 
 def test_sibling_reusing_assertion_id_as_typed_attribute_rejected() -> None:
-    # An ID-typed attribute on another element equal to the consumed assertion's ID would let the
-    # backend resolve that ID ambiguously — rejected by the ID-typed uniqueness rule.
+    # Any duplicate ID-typed value is rejected fail-closed, without relying on xmlsec1's
+    # version-specific ID scoping (a non-Assertion ID is inert for the current backend; a colliding
+    # xml:id, by contrast, fails verification outright).
     xml = _mutate(sibling='<samlp:Extra ID="_a1"/>')
     with pytest.raises(MalformedResponseError):
         reject_signature_wrapping(_wrap(xml))

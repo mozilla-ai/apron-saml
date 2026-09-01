@@ -56,9 +56,12 @@ def _reject_ambiguous_ids(parsed: ParsedResponse) -> None:
     No ID-typed attribute value (local name ``ID``/``Id``/``xml:id``) may appear on more than one
     element. The consumed assertion's own ID is an ID-typed value, so this also guarantees the backend
     cannot resolve that ID to a different element. Only ID-typed attributes are compared: a non-ID
-    attribute (for example ``Name``) cannot influence ID resolution. Comparison uses XML whitespace
-    normalization (``xml:id``/``xs:ID`` collapse whitespace), so a padded value cannot evade a match
-    the XML-security backend would still resolve as equal.
+    attribute (for example ``Name``) cannot influence ID resolution. All three ID-typed names are
+    checked document-wide by design — this is not a model of xmlsec1's current registration (which
+    scopes ``ID`` to ``<Assertion>`` and honors ``xml:id`` document-wide), so the invariant stays
+    fail-closed and independent of the backend's version-specific ID handling. Comparison uses XML
+    whitespace normalization (``xml:id``/``xs:ID`` collapse whitespace), so a padded value cannot evade
+    a match the XML-security backend would still resolve as equal.
 
     Raises:
         MalformedResponseError: If any ID-typed attribute value is shared by two elements.
