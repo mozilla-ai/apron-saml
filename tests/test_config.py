@@ -33,16 +33,25 @@ def test_all_valid_fields_accepted() -> None:
         entity_id=_ENTITY_ID,
         acs_url="http://localhost:8000/acs",
         idp_metadata=_METADATA,
-        want_assertions_signed=False,
         clock_skew=timedelta(0),
         allow_idp_initiated=True,
         decrypt_key="placeholder-decrypt-key",
     )
     assert cfg.acs_url == "http://localhost:8000/acs"
-    assert cfg.want_assertions_signed is False
     assert cfg.clock_skew == timedelta(0)
     assert cfg.allow_idp_initiated is True
     assert cfg.decrypt_key is not None
+
+
+def test_want_assertions_signed_false_rejected() -> None:
+    # Fail closed until response-level signature acceptance is implemented (#52).
+    with pytest.raises(ValueError, match="want_assertions_signed"):
+        SamlConfig(
+            entity_id=_ENTITY_ID,
+            acs_url=_ACS_URL,
+            idp_metadata=_METADATA,
+            want_assertions_signed=False,
+        )
 
 
 def test_config_is_frozen() -> None:

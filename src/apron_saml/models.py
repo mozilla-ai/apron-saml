@@ -37,8 +37,8 @@ class SamlConfig:
         Raises:
             ValueError: If ``entity_id``, ``acs_url``, or ``idp_metadata`` is blank; if ``acs_url``
                 is not an absolute http or https URL or carries userinfo; if ``idp_metadata`` does
-                not appear to contain XML; if ``clock_skew`` is negative; or if ``decrypt_key`` is
-                blank when supplied.
+                not appear to contain XML; if ``clock_skew`` is negative; if ``decrypt_key`` is
+                blank when supplied; or if ``want_assertions_signed`` is False (not yet supported).
         """
         if not self.entity_id.strip():
             raise ValueError("entity_id must not be blank")
@@ -59,6 +59,13 @@ class SamlConfig:
             raise ValueError("clock_skew must not be negative")
         if self.decrypt_key is not None and not self.decrypt_key.strip():
             raise ValueError("decrypt_key must not be blank when provided")
+        # Fail closed: response-level signature acceptance is not implemented yet (tracked in #52), so
+        # a relaxed configuration is rejected at construction rather than silently ignored.
+        if not self.want_assertions_signed:
+            raise ValueError(
+                "want_assertions_signed=False is not yet supported: response-level signature "
+                "acceptance is not implemented, so assertion signatures are always required"
+            )
 
 
 @dataclass(frozen=True)
