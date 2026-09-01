@@ -20,26 +20,28 @@ _ASSERTION_TAG = f"{{{_SAML_NS}}}Assertion"
 _SCHEMA_NS = {"saml": _SAML_NS}
 
 
-def _require_sole_consumed_assertion(parsed: ParsedResponse) -> str:
-    """Return the consumed assertion's ID after proving it is the document's only assertion.
+def _require_sole_consumed_assertion(parsed: ParsedResponse) -> None:
+    """Reject the document unless the consumed assertion has a non-empty ID and is the only assertion.
 
     The consumed ``parsed.assertion`` must carry a non-empty ID and must be the single
     ``<Assertion>`` anywhere in ``parsed.root`` — binding, by object identity, the element the
     application consumes to the element the rest of the pipeline verifies.
+
+    Raises:
+        MalformedResponseError: If the assertion has no ID, or the document does not carry exactly
+            one assertion that is the consumed element.
     """
-    assertion_id = (parsed.assertion.get("ID") or "").strip()
-    if not assertion_id:
+    if not (parsed.assertion.get("ID") or "").strip():
         raise MalformedResponseError("assertion has no ID")
     found = [e for e in parsed.root.iter() if e.tag == _ASSERTION_TAG]
     if len(found) != 1 or found[0] is not parsed.assertion:
         raise MalformedResponseError("SAML Response does not carry exactly one, unambiguous assertion")
-    return assertion_id
 
 
 _XML_ID = "{http://www.w3.org/XML/1998/namespace}id"
 # Attribute local names an XML/xmlsec ID resolver may treat as ID-typed. Bare lowercase ``id`` is
-# excluded (not ID-typed without a DTD/schema; legitimate inside XHTML AttributeValue content) — the
-# decisive value rule below still catches an ``id`` that reuses the consumed assertion's ID value.
+# excluded: it is not ID-typed without a DTD/schema (DTDs are rejected upstream), so it cannot
+# influence the backend's ID resolution.
 _ID_ATTRS = ("ID", "Id", _XML_ID)
 
 
@@ -48,22 +50,21 @@ def _normalize_id(value: str) -> str:
     return " ".join(value.split())
 
 
-def _reject_ambiguous_ids(parsed: ParsedResponse, assertion_id: str) -> None:
-    """Reject the document if the assertion ID is reusable or any ID-typed value is shared.
+def _reject_ambiguous_ids(parsed: ParsedResponse) -> None:
+    """Reject the document if any ID-typed attribute value is shared by two elements.
 
-    Decisive rule: the consumed assertion's ID value must not appear as any attribute value on any
-    other element, so the backend cannot resolve that ID to a different element. Defense-in-depth:
-    no ID-typed attribute value (``ID``/``Id``/``xml:id``) may appear on more than one element. Both
-    rules compare under XML whitespace normalization (``xml:id``/``xs:ID`` collapse whitespace), so a
-    padded value cannot evade a comparison the XML-security backend would still resolve as equal.
+    No ID-typed attribute value (local name ``ID``/``Id``/``xml:id``) may appear on more than one
+    element. The consumed assertion's own ID is an ID-typed value, so this also guarantees the backend
+    cannot resolve that ID to a different element. Only ID-typed attributes are compared: a non-ID
+    attribute (for example ``Name``) cannot influence ID resolution. Comparison uses XML whitespace
+    normalization (``xml:id``/``xs:ID`` collapse whitespace), so a padded value cannot evade a match
+    the XML-security backend would still resolve as equal.
+
+    Raises:
+        MalformedResponseError: If any ID-typed attribute value is shared by two elements.
     """
-    normalized_assertion_id = _normalize_id(assertion_id)
     typed_id_values: dict[str, Element] = {}
     for element in parsed.root.iter():
-        if element is not parsed.assertion:
-            for value in element.attrib.values():
-                if _normalize_id(value) == normalized_assertion_id:
-                    raise MalformedResponseError("assertion ID is not unique in the SAML Response")
         for name in _ID_ATTRS:
             value = element.get(name)
             if value is None:
@@ -84,6 +85,9 @@ def _require_sole_assertion_signature(parsed: ParsedResponse) -> None:
     exactly one ``<ds:Signature>`` in the assertion subtree proves the single signature is the
     direct-child enveloped one, and closes a signature planted in an open-content slot
     (``SubjectConfirmationData``/``AttributeValue``/``Advice``).
+
+    Raises:
+        MalformedResponseError: If the assertion subtree does not carry exactly one signature.
     """
     signatures = [e for e in parsed.assertion.iter() if e.tag == _SIGNATURE_TAG]
     if len(signatures) != 1:
@@ -101,7 +105,11 @@ class SchemaBundleError(Exception):
 
 @functools.cache
 def _assertion_schema() -> xmlschema.XMLSchema:
-    """Build (once) the offline SAML assertion schema from the vendored bundle."""
+    """Build (once) the offline SAML assertion schema from the vendored bundle.
+
+    Raises:
+        SchemaBundleError: If the vendored schema bundle cannot be loaded.
+    """
     try:
         with as_file(files("apron_saml") / "schemas") as schema_dir:
             return xmlschema.XMLSchema(
@@ -135,6 +143,10 @@ def _reject_schema_invalid_assertion(parsed: ParsedResponse) -> None:
     document's own namespace declarations, recovered via ``start-ns`` so a legitimately-typed
     ``AttributeValue`` validates regardless of where its prefix is declared; ``schema_path`` binds
     the anchored selection to the ``Assertion`` global declaration so the content model is enforced.
+
+    Raises:
+        MalformedResponseError: If the assertion does not conform to the hardened local schema.
+        SchemaBundleError: If the vendored schema bundle cannot be loaded.
     """
     try:
         namespaces = {**_document_namespaces(parsed.response_xml), **_SCHEMA_NS}
@@ -167,7 +179,7 @@ def reject_signature_wrapping(parsed: ParsedResponse) -> None:
         MalformedResponseError: If any wrapping, ID-ambiguity, or schema-conformance check fails.
         SchemaBundleError: If the bundled schema could not be loaded — a packaging/deployment fault.
     """
-    assertion_id = _require_sole_consumed_assertion(parsed)
-    _reject_ambiguous_ids(parsed, assertion_id)
+    _require_sole_consumed_assertion(parsed)
+    _reject_ambiguous_ids(parsed)
     _require_sole_assertion_signature(parsed)
     _reject_schema_invalid_assertion(parsed)

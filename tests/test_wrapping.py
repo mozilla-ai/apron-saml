@@ -71,16 +71,23 @@ def test_consumed_assertion_not_the_tree_assertion_rejected() -> None:
         reject_signature_wrapping(parsed)
 
 
-def test_duplicate_id_value_across_elements_rejected() -> None:
-    # A NON-ID attribute reusing the assertion's ID value must still be caught (decisive value rule).
+def test_non_id_attribute_equal_to_assertion_id_allowed() -> None:
+    # A NON-ID attribute (e.g. Name) whose value happens to equal the assertion's ID cannot influence
+    # the backend's ID resolution, so it must not be rejected — only ID-typed attributes are compared.
     xml = _mutate(sibling='<samlp:Extra foo="_a1"/>')
+    reject_signature_wrapping(_wrap(xml))  # no raise.
+
+
+def test_sibling_reusing_assertion_id_as_typed_attribute_rejected() -> None:
+    # An ID-typed attribute on another element equal to the consumed assertion's ID would let the
+    # backend resolve that ID ambiguously — rejected by the ID-typed uniqueness rule.
+    xml = _mutate(sibling='<samlp:Extra ID="_a1"/>')
     with pytest.raises(MalformedResponseError):
         reject_signature_wrapping(_wrap(xml))
 
 
 def test_duplicate_typed_id_rejected() -> None:
-    # Isolate the typed-ID branch (Id name, xmldsig spelling) with a value distinct from the
-    # assertion's own ID, so the decisive-value rule does not mask it.
+    # Two elements sharing an Id (xmldsig spelling) value collide under the ID-typed uniqueness rule.
     xml = _mutate(sibling='<samlp:A Id="dup2"/><samlp:B Id="dup2"/>')
     with pytest.raises(MalformedResponseError):
         reject_signature_wrapping(_wrap(xml))
@@ -98,9 +105,9 @@ def test_unique_ids_pass() -> None:
 
 
 def test_whitespace_padded_id_colliding_after_normalization_rejected() -> None:
-    # xml:id/xs:ID use XML whitespace normalization, so a padded value that collapses to the
-    # assertion's own ID must still trip the decisive-value rule (an XML-security backend resolves
-    # it to the same element the raw-value comparison would miss).
+    # xml:id/xs:ID use XML whitespace normalization, so a padded xml:id that collapses to the
+    # assertion's own ID collides under the ID-typed uniqueness rule (an XML-security backend
+    # resolves it to the same element a raw-value comparison would miss).
     xml = _mutate(sibling='<samlp:Extra xml:id=" _a1 "/>')
     with pytest.raises(MalformedResponseError):
         reject_signature_wrapping(_wrap(xml))
