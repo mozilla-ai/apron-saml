@@ -6,6 +6,7 @@ XML-Signature-Wrapping hardening, ``Conditions``, ``SubjectConfirmation``, and r
 
 from __future__ import annotations
 
+from apron_saml.conditions import validate_conditions
 from apron_saml.models import IdPDescriptor, SamlConfig, SamlIdentity
 from apron_saml.protocols import AssertionStore, Clock
 from apron_saml.response import parse_response
@@ -25,10 +26,10 @@ def validate_and_extract(
     """Validate a decoded SAML Response end to end and return the extracted identity.
 
     Runs the SP-side security checks in trust order, returning a SamlIdentity only once every check
-    has passed and raising a SamlError subclass on the first failure. XSW hardening and signature
-    verification are enforced today, with XSW hardening running first so a wrapped assertion is
-    rejected before any signature is trusted; the remaining Conditions, SubjectConfirmation, replay,
-    and assembly steps are not yet implemented and raise NotImplementedError until they land.
+    has passed and raising a SamlError subclass on the first failure. XSW hardening runs first so a
+    wrapped assertion is rejected before any signature is trusted, then signature verification, then
+    the assertion's Conditions (validity window and audience); the remaining SubjectConfirmation,
+    replay, and assembly steps are not yet implemented and raise NotImplementedError until they land.
 
     Args:
         response_xml: The decoded SAML Response XML, as produced by decode_response.
@@ -47,4 +48,5 @@ def validate_and_extract(
     parsed = parse_response(response_xml)
     reject_signature_wrapping(parsed)
     verify_assertion_signature(parsed, idp)
-    raise NotImplementedError  # Conditions, SubjectConfirmation, replay, and assembly land in #22-#26.
+    validate_conditions(parsed.assertion, audience=config.entity_id, now=clock.now(), clock_skew=config.clock_skew)
+    raise NotImplementedError  # SubjectConfirmation, replay, and assembly land in #23-#26.
