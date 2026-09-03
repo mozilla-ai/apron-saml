@@ -82,3 +82,18 @@ def test_process_response_runs_conditions_after_signature() -> None:
     sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     with pytest.raises(MalformedResponseError):
         sp.process_response(_b64(signed.response_xml))
+
+
+def test_process_response_accepts_valid_conditions() -> None:
+    # The one positive path through the public entry point: decode, wrapping, signature, and
+    # Conditions all clear, stopping only at the not-yet-implemented remainder. The window is left
+    # open-ended so this runs against the default system clock, which nothing else exercises.
+    conditions = (
+        '<saml:Conditions NotOnOrAfter="2099-01-01T00:00:00Z">'
+        "<saml:AudienceRestriction><saml:Audience>https://sp.example.com/metadata</saml:Audience>"
+        "</saml:AudienceRestriction></saml:Conditions>"
+    )
+    signed = sign_assertion_response(conditions=conditions)
+    sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
+    with pytest.raises(NotImplementedError):
+        sp.process_response(_b64(signed.response_xml))
