@@ -76,8 +76,8 @@ def test_process_response_rejects_tampered_signature() -> None:
 
 
 def test_process_response_runs_conditions_after_signature() -> None:
-    # A validly-signed assertion with no <Conditions> passes signature verification and is then
-    # rejected by the Conditions check, proving Conditions runs after (and only after) verification.
+    # A validly-signed assertion with no <Conditions> is rejected, so the public entry point reaches
+    # the Conditions check. Pipeline ordering itself is proven in tests/test_validation.py.
     signed = sign_assertion_response()
     sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     with pytest.raises(MalformedResponseError):
