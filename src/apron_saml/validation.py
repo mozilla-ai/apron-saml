@@ -44,6 +44,7 @@ def validate_and_extract(
 
     Raises:
         SamlError: On the first failed security check (for example a signature that does not verify).
+        ValueError: If the clock returns a timezone-naive instant, which breaks the time-source contract.
     """
     parsed = parse_response(response_xml)
     reject_signature_wrapping(parsed)

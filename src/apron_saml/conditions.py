@@ -34,12 +34,15 @@ def _local_name(tag: str) -> str:
 def _parse_instant(value: str, attribute: str) -> datetime:
     """Parse a SAML timestamp attribute into a timezone-aware datetime.
 
-    Parsing accepts a superset of the ``xs:dateTime`` lexical form (whatever
-    ``datetime.fromisoformat`` admits), which keeps every shape mainstream identity providers emit —
-    trailing ``Z``, numeric offsets, and fractional seconds — working. A timezone-unqualified value is
-    rejected, because SAML requires an explicit UTC designator or offset and comparing a naive instant
-    would be ambiguous. Fractional seconds finer than a microsecond are truncated, since that is the
-    resolution ``datetime`` can represent; the effect is bounded below one microsecond.
+    The accepted syntax overlaps ``xs:dateTime`` rather than containing it.
+    Every shape mainstream identity providers emit is admitted — trailing ``Z``, numeric offsets, and
+    fractional seconds — while a few schema-valid forms are refused, notably end-of-day ``24:00:00``,
+    whose acceptance additionally varies across interpreter versions.
+    A refused value fails closed as malformed rather than being reinterpreted.
+    A timezone-unqualified value is rejected, because SAML requires an explicit UTC designator or offset
+    and comparing a naive instant would be ambiguous.
+    Fractional seconds finer than a microsecond are truncated, since that is the resolution ``datetime``
+    can represent; the effect is bounded below one microsecond.
 
     Raises:
         MalformedResponseError: If the value cannot be parsed, is out of the representable range, or
