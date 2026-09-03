@@ -5,7 +5,7 @@ import pytest
 from signing_support import sign_assertion_response
 
 from apron_saml import IdPDescriptor, SamlConfig
-from apron_saml.errors import MalformedResponseError, SignatureError
+from apron_saml.errors import AssertionExpiredError, AudienceMismatchError, MalformedResponseError, SignatureError
 from apron_saml.validation import validate_and_extract
 
 _NOW = datetime(2024, 1, 1, 12, 0, tzinfo=UTC)
@@ -80,4 +80,33 @@ def test_conditions_failure_surfaces_from_the_pipeline() -> None:
     # Unpatched, the signed fixture carries no <Conditions>, so the real check rejects it.
     signed = sign_assertion_response()
     with pytest.raises(MalformedResponseError):
+        _validate(signed.response_xml, signed.cert_pem)
+
+
+def _conditions(*, audience: str = _SP, window: str = 'NotOnOrAfter="2024-01-01T13:00:00Z"') -> str:
+    return (
+        f"<saml:Conditions {window}>"
+        f"<saml:AudienceRestriction><saml:Audience>{audience}</saml:Audience></saml:AudienceRestriction>"
+        f"</saml:Conditions>"
+    )
+
+
+def test_valid_conditions_pass_the_whole_pipeline() -> None:
+    # The one positive path: a signed assertion carrying a schema-valid <Conditions> in its mandated
+    # position clears wrapping, signature verification, and the Conditions check, stopping only at the
+    # not-yet-implemented remainder.
+    signed = sign_assertion_response(conditions=_conditions())
+    with pytest.raises(NotImplementedError):
+        _validate(signed.response_xml, signed.cert_pem)
+
+
+def test_expired_conditions_rejected_by_the_whole_pipeline() -> None:
+    signed = sign_assertion_response(conditions=_conditions(window='NotOnOrAfter="2024-01-01T11:00:00Z"'))
+    with pytest.raises(AssertionExpiredError):
+        _validate(signed.response_xml, signed.cert_pem)
+
+
+def test_foreign_audience_rejected_by_the_whole_pipeline() -> None:
+    signed = sign_assertion_response(conditions=_conditions(audience="https://other.example/sp"))
+    with pytest.raises(AudienceMismatchError):
         _validate(signed.response_xml, signed.cert_pem)
