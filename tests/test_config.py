@@ -137,3 +137,11 @@ def test_rejects_blank_decrypt_key() -> None:
             idp_metadata=_METADATA,
             decrypt_key="   ",
         )
+
+
+def test_surrounding_whitespace_is_stripped_from_identifiers() -> None:
+    # A value read from an environment variable or secret file often carries a trailing newline; it
+    # must not become an identifier that matches nothing downstream.
+    cfg = _config(entity_id=f"\n {_ENTITY_ID} \t", acs_url=f"  {_ACS_URL}\n")
+    assert cfg.entity_id == _ENTITY_ID
+    assert cfg.acs_url == _ACS_URL
