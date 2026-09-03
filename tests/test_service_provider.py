@@ -1,5 +1,4 @@
 import base64
-import warnings
 
 import pytest
 from signing_support import sign_assertion_response
@@ -52,15 +51,10 @@ def _b64(xml: str) -> str:
     return base64.b64encode(xml.encode("utf-8")).decode("ascii")
 
 
-def test_warns_when_assertion_signing_relaxed() -> None:
-    with pytest.warns(UserWarning, match="want_assertions_signed"):
+def test_want_assertions_signed_false_rejected() -> None:
+    # Fail closed at construction: response-level signature acceptance is not implemented yet (#52).
+    with pytest.raises(ValueError, match="want_assertions_signed"):
         _sp(_idp_metadata(), want_assertions_signed=False)
-
-
-def test_silent_when_assertion_signing_required() -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        _sp(_idp_metadata())  # default True -> no warning.
 
 
 def test_construction_fails_fast_on_bad_metadata() -> None:

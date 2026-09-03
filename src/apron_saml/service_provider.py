@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from datetime import UTC, datetime
 
 from apron_saml.errors import MetadataError
@@ -45,13 +44,6 @@ class ServiceProvider:
         self._idp = parse_idp_metadata(config.idp_metadata)
         if not self._idp.signing_certificates:
             raise MetadataError("IdP metadata provides no signing certificate to verify assertions")
-        if not config.want_assertions_signed:
-            warnings.warn(
-                "want_assertions_signed=False is not yet honored: response-level signature "
-                "acceptance is not implemented, so assertion signatures are still required.",
-                UserWarning,
-                stacklevel=2,
-            )
 
     def build_authn_request(self, *, relay_state: str | None = None) -> AuthnRequest:
         """Build a SAML authentication request for an SP-initiated login."""

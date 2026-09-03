@@ -284,10 +284,6 @@ def test_generated_sp_metadata_want_assertions_signed_true_reflects_config() -> 
     assert _spsso_descriptor(_sp_config(want_assertions_signed=True)).get("WantAssertionsSigned") == "true"
 
 
-def test_generated_sp_metadata_want_assertions_signed_false_reflects_config() -> None:
-    assert _spsso_descriptor(_sp_config(want_assertions_signed=False)).get("WantAssertionsSigned") == "false"
-
-
 def test_generated_sp_metadata_declares_authn_requests_unsigned() -> None:
     # The library emits unsigned AuthnRequests and holds no request-signing key.
     assert _spsso_descriptor(_sp_config()).get("AuthnRequestsSigned") == "false"
