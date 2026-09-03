@@ -141,6 +141,13 @@ def test_one_time_use_rejected() -> None:
         _check(_conditions(_AUDIENCE + "<saml:OneTimeUse/>"))
 
 
+def test_audience_mismatch_outranks_an_unevaluable_condition() -> None:
+    # Both checks fail here. The documented precedence reports the audience mismatch, which is what a
+    # relayed assertion looks like, rather than the vaguer "cannot evaluate".
+    with pytest.raises(AudienceMismatchError):
+        _check(_conditions("<saml:OneTimeUse/>"))
+
+
 def test_unknown_condition_rejected() -> None:
     inner = _AUDIENCE + (
         '<saml:Condition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '

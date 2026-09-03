@@ -60,6 +60,12 @@ def _parse_instant(value: str, attribute: str) -> datetime:
 def validate_conditions(assertion: Element, *, audience: str, now: datetime, clock_skew: timedelta) -> None:
     """Enforce the consumed assertion's ``<Conditions>`` against this SP and the current time.
 
+    Every check must pass, so their order changes only which error a multiply-invalid ``<Conditions>``
+    reports, never which assertions are accepted.
+    The audience is checked ahead of evaluability deliberately: an assertion addressed to a different
+    service provider is the more actionable signal — it is what a relayed assertion looks like — so it
+    is reported even when the element also carries a condition this service provider cannot evaluate.
+
     Args:
         assertion: The consumed ``<Assertion>`` element.
         audience: This service provider's entity ID, which an audience restriction must name.
