@@ -61,8 +61,12 @@ class ServiceProvider:
     ) -> SamlIdentity:
         """Decode, fully validate, and extract the identity from a SAML Response.
 
-        Raises a SamlError subclass on any validation failure; returns a SamlIdentity only once
-        every security check has passed.
+        Returns a SamlIdentity only once every security check has passed.
+
+        Raises:
+            SamlError: On the first failed security check.
+            ValueError: If the configured clock returns a timezone-naive instant, which breaks the
+                time-source contract.
         """
         response_xml = decode_response(saml_response_b64)
         return validate_and_extract(

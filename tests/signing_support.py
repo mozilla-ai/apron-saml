@@ -79,8 +79,13 @@ def sign_assertion_response(
     key_pem: str | None = None,
     cert_pem: str | None = None,
     algorithm: str = "sha256",
+    conditions: str = "",
 ) -> SignedResponse:
-    """Return a Response whose assertion is enveloped-signed with a throwaway (or supplied) key."""
+    """Return a Response whose assertion is enveloped-signed with a throwaway (or supplied) key.
+
+    ``conditions`` is inserted as raw XML in the schema-mandated position for an assertion's
+    ``<Conditions>``, immediately after ``<Subject>``; the default omits the element entirely.
+    """
     if key_pem is None or cert_pem is None:
         key_pem, cert_pem = self_signed_cert()
     sign_alg, digest_alg = _ALGORITHMS[algorithm]
@@ -94,7 +99,7 @@ def sign_assertion_response(
         f'<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>'
         f'<saml:Assertion ID="{assertion_id}" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">'
         f"<saml:Issuer>{escaped_issuer}</saml:Issuer>{template}"
-        f"<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>"
+        f"<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>{conditions}"
         f"</saml:Assertion></samlp:Response>"
     )
     context = SecurityContext(CryptoBackendXmlSec1(get_xmlsec_binary()))

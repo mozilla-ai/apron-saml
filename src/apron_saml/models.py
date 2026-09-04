@@ -29,7 +29,12 @@ class SamlConfig:
     decrypt_key: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate the configuration at construction, rejecting values the protocol cannot use.
+        """Validate and normalize the configuration at construction, rejecting values the protocol cannot use.
+
+        ``entity_id`` and ``acs_url`` are stored with surrounding whitespace removed.
+        Both are compared and emitted verbatim, and padding is never significant in a URI, so
+        canonicalizing them here keeps a stray newline from turning into an identifier that matches
+        nothing.
 
         Full validation of ``decrypt_key`` as a usable key is deferred to the decryption path;
         here it is only required to be non-blank when supplied.
@@ -40,9 +45,11 @@ class SamlConfig:
                 not appear to contain XML; if ``clock_skew`` is negative; if ``decrypt_key`` is
                 blank when supplied; or if ``want_assertions_signed`` is False (not yet supported).
         """
-        if not self.entity_id.strip():
+        object.__setattr__(self, "entity_id", self.entity_id.strip())
+        object.__setattr__(self, "acs_url", self.acs_url.strip())
+        if not self.entity_id:
             raise ValueError("entity_id must not be blank")
-        if not self.acs_url.strip():
+        if not self.acs_url:
             raise ValueError("acs_url must not be blank")
         parsed = urlparse(self.acs_url)
         if parsed.scheme not in ("http", "https") or not parsed.hostname:

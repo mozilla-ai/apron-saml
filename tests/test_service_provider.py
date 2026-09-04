@@ -3,7 +3,7 @@ import base64
 import pytest
 from signing_support import sign_assertion_response
 
-from apron_saml import MetadataError, SamlConfig, ServiceProvider, SignatureError
+from apron_saml import MalformedResponseError, MetadataError, SamlConfig, ServiceProvider, SignatureError
 
 _MD = "urn:oasis:names:tc:SAML:2.0:metadata"
 _DS = "http://www.w3.org/2000/09/xmldsig#"
@@ -75,8 +75,25 @@ def test_process_response_rejects_tampered_signature() -> None:
         sp.process_response(_b64(tampered))
 
 
-def test_process_response_valid_signature_reaches_unimplemented_steps() -> None:
+def test_process_response_runs_conditions_after_signature() -> None:
+    # A validly-signed assertion with no <Conditions> is rejected, so the public entry point reaches
+    # the Conditions check. Pipeline ordering itself is proven in tests/test_validation.py.
     signed = sign_assertion_response()
+    sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
+    with pytest.raises(MalformedResponseError):
+        sp.process_response(_b64(signed.response_xml))
+
+
+def test_process_response_accepts_valid_conditions() -> None:
+    # The one positive path through the public entry point: decode, wrapping, signature, and
+    # Conditions all clear, stopping only at the not-yet-implemented remainder. The window is left
+    # open-ended so this runs against the default system clock, which nothing else exercises.
+    conditions = (
+        '<saml:Conditions NotOnOrAfter="2099-01-01T00:00:00Z">'
+        "<saml:AudienceRestriction><saml:Audience>https://sp.example.com/metadata</saml:Audience>"
+        "</saml:AudienceRestriction></saml:Conditions>"
+    )
+    signed = sign_assertion_response(conditions=conditions)
     sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     with pytest.raises(NotImplementedError):
         sp.process_response(_b64(signed.response_xml))
