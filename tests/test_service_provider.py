@@ -3,7 +3,14 @@ import base64
 import pytest
 from signing_support import sign_assertion_response
 
-from apron_saml import MalformedResponseError, MetadataError, SamlConfig, ServiceProvider, SignatureError
+from apron_saml import (
+    InResponseToError,
+    MalformedResponseError,
+    MetadataError,
+    SamlConfig,
+    ServiceProvider,
+    SignatureError,
+)
 
 _MD = "urn:oasis:names:tc:SAML:2.0:metadata"
 _DS = "http://www.w3.org/2000/09/xmldsig#"
@@ -47,6 +54,14 @@ def _sp(idp_metadata: str, *, want_assertions_signed: bool = True) -> ServicePro
     )
 
 
+# Conditions with an open-ended window so tests can run against the default system clock.
+_OPEN_ENDED_CONDITIONS = (
+    '<saml:Conditions NotOnOrAfter="2099-01-01T00:00:00Z">'
+    "<saml:AudienceRestriction><saml:Audience>https://sp.example.com/metadata</saml:Audience>"
+    "</saml:AudienceRestriction></saml:Conditions>"
+)
+
+
 def _b64(xml: str) -> str:
     return base64.b64encode(xml.encode("utf-8")).decode("ascii")
 
@@ -84,16 +99,30 @@ def test_process_response_runs_conditions_after_signature() -> None:
         sp.process_response(_b64(signed.response_xml))
 
 
-def test_process_response_accepts_valid_conditions() -> None:
-    # The one positive path through the public entry point: decode, wrapping, signature, and
-    # Conditions all clear, stopping only at the not-yet-implemented remainder. The window is left
-    # open-ended so this runs against the default system clock, which nothing else exercises.
-    conditions = (
-        '<saml:Conditions NotOnOrAfter="2099-01-01T00:00:00Z">'
-        "<saml:AudienceRestriction><saml:Audience>https://sp.example.com/metadata</saml:Audience>"
-        "</saml:AudienceRestriction></saml:Conditions>"
+def test_process_response_accepts_a_fully_valid_response() -> None:
+    # The one positive path through the public entry point: decode, wrapping, signature, Conditions,
+    # and SubjectConfirmation all clear, stopping only at the not-yet-implemented remainder. The
+    # windows are left open-ended so this runs against the default system clock, which nothing else
+    # exercises.
+    subject_confirmation = (
+        '<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">'
+        '<saml:SubjectConfirmationData Recipient="https://sp.example.com/acs" '
+        'NotOnOrAfter="2099-01-01T00:00:00Z" InResponseTo="_req1"/></saml:SubjectConfirmation>'
     )
-    signed = sign_assertion_response(conditions=conditions)
+    signed = sign_assertion_response(
+        conditions=_OPEN_ENDED_CONDITIONS,
+        subject_confirmation=subject_confirmation,
+        response_attributes='Destination="https://sp.example.com/acs" InResponseTo="_req1"',
+    )
     sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     with pytest.raises(NotImplementedError):
+        sp.process_response(_b64(signed.response_xml), expected_in_response_to="_req1")
+
+
+def test_process_response_rejects_unsolicited_response_by_default() -> None:
+    # Omitting expected_in_response_to declares the response unsolicited, which the secure default
+    # configuration refuses.
+    signed = sign_assertion_response(conditions=_OPEN_ENDED_CONDITIONS)
+    sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
+    with pytest.raises(InResponseToError):
         sp.process_response(_b64(signed.response_xml))

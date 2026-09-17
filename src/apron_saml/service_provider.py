@@ -61,12 +61,20 @@ class ServiceProvider:
     ) -> SamlIdentity:
         """Decode, fully validate, and extract the identity from a SAML Response.
 
-        Returns a SamlIdentity only once every security check has passed.
+        Args:
+            saml_response_b64: The base64-encoded ``SAMLResponse`` value received at the assertion
+                consumer endpoint.
+            expected_in_response_to: The ID of the outstanding authentication request this response
+                must answer. Pass ``None`` only for an unsolicited (IdP-initiated) response, which is
+                accepted only when the configuration allows it.
+
+        Returns:
+            The validated identity, only once every security check has passed.
 
         Raises:
             SamlError: On the first failed security check.
-            ValueError: If the configured clock returns a timezone-naive instant, which breaks the
-                time-source contract.
+            ValueError: If the configured clock returns a timezone-naive instant or
+                ``expected_in_response_to`` is blank, which break the caller contract.
         """
         response_xml = decode_response(saml_response_b64)
         return validate_and_extract(

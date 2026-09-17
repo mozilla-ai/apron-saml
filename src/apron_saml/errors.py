@@ -36,7 +36,7 @@ class AudienceMismatchError(SamlError):
 
 
 class RecipientMismatchError(SamlError):
-    """The subject confirmation recipient did not match the configured assertion consumer URL."""
+    """The subject confirmation Recipient or Response Destination did not match the assertion consumer URL."""
 
 
 class InResponseToError(SamlError):
