@@ -115,12 +115,16 @@ def _subject_confirmation(*, recipient: str = _ACS, in_response_to: str | None =
 _SOLICITED = f'Destination="{_ACS}" InResponseTo="{_REQUEST_ID}"'
 
 
-def _signed_valid(**overrides: str) -> tuple[str, str]:
+def _signed_valid(
+    *,
+    conditions: str | None = None,
+    subject_confirmation: str | None = None,
+    response_attributes: str = _SOLICITED,
+) -> tuple[str, str]:
     signed = sign_assertion_response(
-        conditions=_conditions(),
-        subject_confirmation=overrides.pop("subject_confirmation", _subject_confirmation()),
-        response_attributes=overrides.pop("response_attributes", _SOLICITED),
-        **overrides,
+        conditions=_conditions() if conditions is None else conditions,
+        subject_confirmation=_subject_confirmation() if subject_confirmation is None else subject_confirmation,
+        response_attributes=response_attributes,
     )
     return signed.response_xml, signed.cert_pem
 
