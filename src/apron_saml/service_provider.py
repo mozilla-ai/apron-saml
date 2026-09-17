@@ -57,16 +57,22 @@ class ServiceProvider:
         self,
         saml_response_b64: str,
         *,
-        expected_in_response_to: str | None = None,
+        expected_in_response_to: str | None,
     ) -> SamlIdentity:
         """Decode, fully validate, and extract the identity from a SAML Response.
+
+        NOTE: ``expected_in_response_to`` must be the ID of a request this service provider issued for
+        this same user agent, held in state the user agent cannot read or influence, and discarded once
+        a response consumes it. The library cannot verify any of that, and an ID taken from the response
+        itself or accepted more than once reduces the request-correlation check to a formality.
 
         Args:
             saml_response_b64: The base64-encoded ``SAMLResponse`` value received at the assertion
                 consumer endpoint.
             expected_in_response_to: The ID of the outstanding authentication request this response
-                must answer. Pass ``None`` only for an unsolicited (IdP-initiated) response, which is
-                accepted only when the configuration allows it.
+                must answer. It has no default: ``None`` declares the response unsolicited
+                (IdP-initiated), which is accepted only when the configuration allows it, so it must be
+                chosen rather than fallen into.
 
         Returns:
             The validated identity, only once every security check has passed.

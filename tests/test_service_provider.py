@@ -87,7 +87,7 @@ def test_process_response_rejects_tampered_signature() -> None:
     sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     tampered = signed.response_xml.replace("user@example.com", "attacker@evil.example")
     with pytest.raises(SignatureError):
-        sp.process_response(_b64(tampered))
+        sp.process_response(_b64(tampered), expected_in_response_to="_req1")
 
 
 def test_process_response_runs_conditions_after_signature() -> None:
@@ -96,7 +96,7 @@ def test_process_response_runs_conditions_after_signature() -> None:
     signed = sign_assertion_response()
     sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     with pytest.raises(MalformedResponseError):
-        sp.process_response(_b64(signed.response_xml))
+        sp.process_response(_b64(signed.response_xml), expected_in_response_to="_req1")
 
 
 def test_process_response_accepts_a_fully_valid_response() -> None:
@@ -120,9 +120,17 @@ def test_process_response_accepts_a_fully_valid_response() -> None:
 
 
 def test_process_response_rejects_unsolicited_response_by_default() -> None:
-    # Omitting expected_in_response_to declares the response unsolicited, which the secure default
-    # configuration refuses.
+    # Passing None declares the response unsolicited, which the secure default configuration refuses.
     signed = sign_assertion_response(conditions=_OPEN_ENDED_CONDITIONS)
     sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
     with pytest.raises(InResponseToError):
-        sp.process_response(_b64(signed.response_xml))
+        sp.process_response(_b64(signed.response_xml), expected_in_response_to=None)
+
+
+def test_process_response_requires_an_explicit_request_id() -> None:
+    # None is the positive declaration that a response is unsolicited, so it must be chosen rather
+    # than fallen into by omitting the argument.
+    signed = sign_assertion_response(conditions=_OPEN_ENDED_CONDITIONS)
+    sp = _sp(_idp_metadata(_cert_body(signed.cert_pem)))
+    with pytest.raises(TypeError):
+        sp.process_response(_b64(signed.response_xml))  # ty: ignore[missing-argument]

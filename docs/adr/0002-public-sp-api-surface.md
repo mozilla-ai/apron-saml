@@ -207,3 +207,29 @@ its `MetadataError` rejection live in the metadata layer.
 - ADR 0001 (XML-security backend) — the facade and `SamlError` hierarchy this surface sits on.
 - OASIS SAML 2.0 Core — https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
   (§2.3.3 `<Assertion>`/`<Issuer>`, §2.5.1 `<Conditions>`, §2.4.1.1 `<SubjectConfirmation>`).
+
+### 2026-09-17 — `expected_in_response_to` is required on `process_response`
+
+The ratified facade listed `process_response` among the SP flows without fixing its parameter defaults.
+The scaffold gave `expected_in_response_to` a default of `None`, and implementing `SubjectConfirmation`
+(#23) settled what that value means: `None` is not "unset", it is the positive declaration that the
+response is unsolicited (IdP-initiated). Those two readings collapsing onto one value is the problem.
+A caller who simply forgets the argument silently reclassifies an ordinary SP-initiated login as an
+unsolicited one, and the request-correlation check that binds the assertion to their own authentication
+request is skipped rather than failed.
+
+Today that composition still fails closed, because `allow_idp_initiated` defaults to `False` and the
+unsolicited path is refused outright. The defence is incidental: it rests on a second, unrelated
+default, and it disappears for exactly the deployments that opt into IdP-initiated SSO — the ones
+carrying the documented replay risk that made that flag default to `False` in the first place. A secure
+default should not depend on a different setting staying at its own secure default.
+
+`expected_in_response_to` therefore becomes a required keyword argument. Callers pass the request ID
+returned by `build_authn_request` for a solicited login, or pass `None` explicitly to declare a response
+unsolicited. This amends the **Facade, not free functions** decision by fixing one signature; the export
+list, the error hierarchy, and every other flow are unchanged.
+
+The change is source-breaking for a caller who relied on the default, which is the intent: the failure
+is a `TypeError` at the call site, before any assertion is processed, rather than a silent change of
+security posture at runtime. The internal `validate_and_extract` and `validate_subject_confirmation`
+already required the argument, so only the facade moves. No release carries the defaulted form.
