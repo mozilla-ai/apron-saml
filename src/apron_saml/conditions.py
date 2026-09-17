@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from xml.etree.ElementTree import Element
 
 from apron_saml.errors import AssertionExpiredError, AudienceMismatchError, MalformedResponseError
+from apron_saml.timestamps import has_expired, is_not_yet_valid, parse_instant, require_aware
 
 _SAML_NS = "urn:oasis:names:tc:SAML:2.0:assertion"
 _CONDITIONS = f"{{{_SAML_NS}}}Conditions"
@@ -29,32 +30,6 @@ _EVALUABLE_CONDITIONS = frozenset({_AUDIENCE_RESTRICTION, _PROXY_RESTRICTION})
 def _local_name(tag: str) -> str:
     """Return the local part of a namespace-qualified element tag."""
     return tag.rpartition("}")[2] or tag
-
-
-def _parse_instant(value: str, attribute: str) -> datetime:
-    """Parse a SAML timestamp attribute into a timezone-aware datetime.
-
-    The accepted syntax overlaps ``xs:dateTime`` rather than containing it.
-    Every shape mainstream identity providers emit is admitted — trailing ``Z``, numeric offsets, and
-    fractional seconds — while a few schema-valid forms are refused, notably end-of-day ``24:00:00``,
-    whose acceptance additionally varies across interpreter versions.
-    A refused value fails closed as malformed rather than being reinterpreted.
-    A timezone-unqualified value is rejected, because SAML requires an explicit UTC designator or offset
-    and comparing a naive instant would be ambiguous.
-    Fractional seconds finer than a microsecond are truncated, since that is the resolution ``datetime``
-    can represent; the effect is bounded below one microsecond.
-
-    Raises:
-        MalformedResponseError: If the value cannot be parsed, is out of the representable range, or
-            carries no timezone.
-    """
-    try:
-        parsed = datetime.fromisoformat(value.strip())
-    except (ValueError, OverflowError) as e:
-        raise MalformedResponseError(f"assertion Conditions {attribute} is not a valid timestamp") from e
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise MalformedResponseError(f"assertion Conditions {attribute} is not timezone-qualified")
-    return parsed
 
 
 def validate_conditions(assertion: Element, *, audience: str, now: datetime, clock_skew: timedelta) -> None:
@@ -80,8 +55,7 @@ def validate_conditions(assertion: Element, *, audience: str, now: datetime, clo
             service provider cannot evaluate.
         ValueError: If ``now`` is timezone-naive, which breaks the time-source contract.
     """
-    if now.tzinfo is None or now.utcoffset() is None:
-        raise ValueError("the time source returned a naive datetime; it must return an aware UTC datetime")
+    require_aware(now)
     # SAML 2.0 Core §2.5.1 permits at most one <Conditions>; more than one is unevaluable. The bundled
     # assertion schema already rejects duplicates upstream, so this keeps the check self-contained
     # rather than depending on that earlier step.
@@ -99,9 +73,7 @@ def validate_conditions(assertion: Element, *, audience: str, now: datetime, clo
 def _enforce_validity_window(conditions: Element, *, now: datetime, clock_skew: timedelta) -> None:
     """Require a bounded validity window and reject unless ``now`` falls inside it (skew applied).
 
-    ``NotOnOrAfter`` is required and exclusive; ``NotBefore`` is optional and inclusive. The bounds are
-    compared as differences against ``now`` rather than by shifting them by ``clock_skew``, so a
-    timestamp near the representable limits cannot raise an arithmetic error out of this module.
+    ``NotOnOrAfter`` is required and exclusive; ``NotBefore`` is optional and inclusive.
 
     Raises:
         AssertionExpiredError: If ``now`` precedes ``NotBefore`` or reaches ``NotOnOrAfter`` (skew applied).
@@ -111,14 +83,16 @@ def _enforce_validity_window(conditions: Element, *, now: datetime, clock_skew: 
     not_on_or_after = conditions.get("NotOnOrAfter")
     if not_on_or_after is None:
         raise MalformedResponseError("assertion Conditions has no NotOnOrAfter, so its validity is unbounded")
-    expiry = _parse_instant(not_on_or_after, "NotOnOrAfter")
+    expiry = parse_instant(not_on_or_after, field="assertion Conditions NotOnOrAfter")
     not_before_raw = conditions.get("NotBefore")
-    not_before = _parse_instant(not_before_raw, "NotBefore") if not_before_raw is not None else None
+    not_before = (
+        parse_instant(not_before_raw, field="assertion Conditions NotBefore") if not_before_raw is not None else None
+    )
     if not_before is not None and not_before >= expiry:
         raise MalformedResponseError("assertion Conditions NotBefore is not before NotOnOrAfter")
-    if not_before is not None and now < not_before and not_before - now > clock_skew:
+    if not_before is not None and is_not_yet_valid(now, not_before, clock_skew):
         raise AssertionExpiredError("assertion is not yet valid")
-    if now >= expiry and now - expiry >= clock_skew:
+    if has_expired(now, expiry, clock_skew):
         raise AssertionExpiredError("assertion has expired")
 
 
