@@ -80,11 +80,15 @@ def sign_assertion_response(
     cert_pem: str | None = None,
     algorithm: str = "sha256",
     conditions: str = "",
+    subject_confirmation: str = "",
+    response_attributes: str = "",
 ) -> SignedResponse:
     """Return a Response whose assertion is enveloped-signed with a throwaway (or supplied) key.
 
     ``conditions`` is inserted as raw XML in the schema-mandated position for an assertion's
     ``<Conditions>``, immediately after ``<Subject>``; the default omits the element entirely.
+    ``subject_confirmation`` is inserted as raw XML inside ``<Subject>`` after ``<NameID>``, and
+    ``response_attributes`` as raw attributes on the unsigned ``<Response>`` element.
     """
     if key_pem is None or cert_pem is None:
         key_pem, cert_pem = self_signed_cert()
@@ -94,12 +98,13 @@ def sign_assertion_response(
         template = template.decode()
     escaped_issuer = escape(issuer)
     unsigned = (
-        f'<samlp:Response xmlns:samlp="{_SAMLP}" xmlns:saml="{_SAML}" ID="_r1" Version="2.0">'
+        f'<samlp:Response xmlns:samlp="{_SAMLP}" xmlns:saml="{_SAML}" ID="_r1" Version="2.0" {response_attributes}>'
         f"<saml:Issuer>{escaped_issuer}</saml:Issuer>"
         f'<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>'
         f'<saml:Assertion ID="{assertion_id}" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">'
         f"<saml:Issuer>{escaped_issuer}</saml:Issuer>{template}"
-        f"<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>{conditions}"
+        f"<saml:Subject><saml:NameID>user@example.com</saml:NameID>{subject_confirmation}</saml:Subject>"
+        f"{conditions}"
         f"</saml:Assertion></samlp:Response>"
     )
     context = SecurityContext(CryptoBackendXmlSec1(get_xmlsec_binary()))
